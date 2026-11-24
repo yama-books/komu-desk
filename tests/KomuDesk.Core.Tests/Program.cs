@@ -69,4 +69,5 @@ try
     Equal(store.Load(monday).Tasks.Count,1,"invalid save leaves old file");
 }
 finally{Directory.Delete(temp,true);}
+passed+=ImportCases.Run();
 Console.WriteLine($"TOTAL {passed} PASS");
