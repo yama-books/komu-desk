@@ -1,0 +1,37 @@
+name: Verify local desktop
+on:
+  pull_request:
+  push:
+    branches: [main, 'feature/**']
+permissions:
+  contents: read
+jobs:
+  core:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet run --project tests/KomuDesk.Core.Tests/KomuDesk.Core.Tests.csproj -c Release
+  windows-build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet publish src/KomuDesk.Desktop/KomuDesk.Desktop.csproj -c Release -r win-x64 --self-contained true -o publish
+      - name: Verify executable
+        shell: pwsh
+        run: |
+          if (!(Test-Path publish/KOMU-DESK.exe)) { throw "Missing executable" }
+          Get-FileHash publish/KOMU-DESK.exe -Algorithm SHA256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: komu-desk-windows-x64-preview
+          path: publish/
+          retention-days: 14
