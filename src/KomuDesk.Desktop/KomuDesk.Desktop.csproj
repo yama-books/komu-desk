@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>KOMU-DESK</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup><ProjectReference Include="../KomuDesk.Core/KomuDesk.Core.csproj" /></ItemGroup>
+</Project>
