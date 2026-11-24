@@ -1,0 +1,27 @@
+# Local application data and credentials
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.xlsx
+*.xls
+*.xlsm
+*.csv
+*.ics
+*.pdf
+.env
+.env.*
+!.env.example
+*token*.json
+*credentials*.json
+*client_secret*.json
+/local-data/
+/imports/
+/exports/
+/backups/
+/private/
+/logs/
+/node_modules/
+/dist/
+/target/
