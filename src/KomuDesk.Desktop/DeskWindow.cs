@@ -12,7 +12,7 @@ using Microsoft.Win32;
 
 namespace KomuDesk.Desktop;
 
-internal sealed class DeskWindow : Window
+internal sealed partial class DeskWindow : Window
 {
     private readonly LocalStore store;
     private SchoolData data;
@@ -67,12 +67,12 @@ internal sealed class DeskWindow : Window
         clock.FontSize=26; clock.FontWeight=FontWeights.SemiBold; clock.Foreground=Ink;
         next.Foreground=Muted; next.TextWrapping=TextWrapping.Wrap; next.FontSize=13;
         DockPanel.SetDock(header,Dock.Top); root.Children.Add(header);
-        var footer=Text(demo?"デモデータ · 保存しません":"ローカル保存 · Google連携 未実装",11,false,Muted);
+        var footer=Text(demo?"デモデータ · 保存しません":"ローカル保存 · Googleは任意連携",11,false,Muted);
         DockPanel.SetDock(footer,Dock.Bottom); root.Children.Add(footer);
         root.Children.Add(new ScrollViewer { Content=body, VerticalScrollBarVisibility=ScrollBarVisibility.Auto });
         Content=root;
         timer.Tick+=(_,_)=>Tick(); timer.Start();
-        Closing+=OnClosing; Render(); Tick();
+        Closing+=OnClosing; InitGoogle(); Render(); Tick();
     }
     private void Error(Exception e) => MessageBox.Show(this, e is InvalidDataException or ArgumentException or InvalidOperationException or FormatException ? e.Message : "処理に失敗しました。元データは維持されています。 ("+e.GetType().Name+")", "KOMU DESK");
     private bool Commit(SchoolData candidate)
@@ -144,6 +144,7 @@ internal sealed class DeskWindow : Window
         var events=data.Events.Where(e=>e.Date==SchoolData.Iso(day)).OrderBy(e=>e.Time).ToList();
         if(events.Count==0) body.Children.Add(Text("予定なし",13,false,Muted));
         foreach(var e in events) body.Children.Add(Text($"{(e.Time==""?"終日":e.Time)}   {e.Title}",13));
+        RenderGoogle();
         body.Children.Add(Rule());
         var tr=Horizontal(); Add(tr,Text("タスク",16,true),Btn("追加・編集",Tasks)); body.Children.Add(tr);
         foreach(var t in data.Tasks.OrderBy(t=>t.Done).ThenBy(t=>t.Due==""?"9999":t.Due).ToList())
@@ -163,7 +164,7 @@ internal sealed class DeskWindow : Window
         Item("1  学年・色",Grades); Item("2  クラス・色",Classes); Item("3  科目",Subjects); Item("4  担当授業",Groups);
         Item("5  時程",Bells); Item("6  時間割の版・有効期間",Versions); Item("7  週間時間割",Weekly);
         Item("年度・考査計上・表示",Year); Item("日別変更・個別変更",DayChanges);
-        Item("既存Excelから初期取り込み",ImportExcel); Item("予定",Events); Item("タスク",Tasks); Item("授業数集計",Counts); Item("バックアップ（別ファイル）",Backup);
+        Item("Googleカレンダー（任意）",GoogleSettings); Item("既存Excelから初期取り込み",ImportExcel); Item("予定",Events); Item("タスク",Tasks); Item("授業数集計",Counts); Item("バックアップ（別ファイル）",Backup);
         w.Content=new ScrollViewer { Content=p, VerticalScrollBarVisibility=ScrollBarVisibility.Auto }; w.ShowDialog();
     }
     private Window Dialog(string title,double width=760,double height=500)=>new()
