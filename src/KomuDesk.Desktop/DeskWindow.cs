@@ -163,7 +163,7 @@ internal sealed class DeskWindow : Window
         Item("1  学年・色",Grades); Item("2  クラス・色",Classes); Item("3  科目",Subjects); Item("4  担当授業",Groups);
         Item("5  時程",Bells); Item("6  時間割の版・有効期間",Versions); Item("7  週間時間割",Weekly);
         Item("年度・考査計上・表示",Year); Item("日別変更・個別変更",DayChanges);
-        Item("予定",Events); Item("タスク",Tasks); Item("授業数集計",Counts); Item("バックアップ（別ファイル）",Backup);
+        Item("既存Excelから初期取り込み",ImportExcel); Item("予定",Events); Item("タスク",Tasks); Item("授業数集計",Counts); Item("バックアップ（別ファイル）",Backup);
         w.Content=new ScrollViewer { Content=p, VerticalScrollBarVisibility=ScrollBarVisibility.Auto }; w.ShowDialog();
     }
     private Window Dialog(string title,double width=760,double height=500)=>new()
@@ -274,6 +274,22 @@ internal sealed class DeskWindow : Window
         foreach(var (label,key) in new[]{("担当授業","Name"),("確定","Confirmed"),("推定","Estimated"),("残予定","Remaining"),("見込み","Forecast"),("休講","Cancelled"),("要確認","Unresolved")})grid.Columns.Add(Col(label,key));
         void Refresh(){try{if(start.SelectedDate==null||end.SelectedDate==null)return;var a=start.SelectedDate.Value;var b=end.SelectedDate.Value;var now=DateTime.Now;var counts=LessonEngine.Count(data,a,b,now);grid.ItemsSource=counts.Select(c=>new{Name=data.GroupName(c.GroupId),c.Confirmed,c.Estimated,c.Remaining,c.Forecast,c.Cancelled,c.Unresolved}).ToList();int missing=0;for(var d=a;d<=b;d=d.AddDays(1))if(!LessonEngine.Day(data,d,now).Configured)missing++;summary.Text=$"考査 {(data.CountExams?"含む":"除く")} / 未設定日 {missing}日 / 推定は未確定";}catch(Exception e){Error(e);}}
         Add(bar,Text("期間 "),start,Text(" ～ "),end,Btn("集計",Refresh));Add(p,bar,summary,grid);w.Content=p;Refresh();w.ShowDialog();
+    }
+    private void ImportExcel()
+    {
+        if(demo){MessageBox.Show(this,"通常起動時に利用できます。デモには取り込みません。");return;}
+        if(!LegacyImport.IsEmpty(data)){MessageBox.Show(this,"初期移行専用です。既存データがあるため上書きしません。別の初期データへの移行は後続版で対応します。");return;}
+        var dlg=new OpenFileDialog{Filter="Excel (*.xlsx)|*.xlsx",CheckFileExists=true,Multiselect=false};
+        if(dlg.ShowDialog(this)!=true)return;
+        var w=Dialog("Excel初期取り込み",590,500);var p=new StackPanel{Margin=new Thickness(14)};
+        var grade=new TextBox{Text="未分類"};var exam=new CheckBox{Content="考査を授業数に含める",IsChecked=true,Margin=new Thickness(0,6,0,6)};
+        var preview=Text("まだ読み込んでいません。",13,false,Muted);ImportPlan? plan=null;
+        var apply=Btn("確認して取り込む",()=>{if(plan==null||!LegacyImport.IsEmpty(data))return; if(MessageBox.Show(w,"表示した予定・時間割をローカルに登録します。元Excelは変更せず、名列は読み込みません。よろしいですか？","確認",MessageBoxButton.YesNo)!=MessageBoxResult.Yes)return;plan.Data.Display=data.Display;if(Commit(plan.Data)){day=SchoolData.ParseDate(plan.Data.Timetables[0].From);Render();w.Close();}});apply.IsEnabled=false;
+        void Invalidate(){plan=null;apply.IsEnabled=false;preview.Text="設定が変わりました。再プレビューしてください。";}
+        grade.TextChanged+=(_,_)=>Invalidate();exam.Checked+=(_,_)=>Invalidate();exam.Unchecked+=(_,_)=>Invalidate();
+        Add(p,Text("授業数管理Excelの既定形式（3シートのみ）",16,true),Text("仮の学年名"),grade,exam,
+            Btn("読み込み・プレビュー",()=>{try{plan=LegacyImport.Prepare(dlg.FileName,grade.Text,exam.IsChecked==true);var t=plan.Data.Timetables[0];var counts=LessonEngine.Count(plan.Data,SchoolData.ParseDate(t.From),SchoolData.ParseDate(t.To),SchoolData.ParseDate(t.To).AddDays(1));preview.Text=$"対象期間：{t.From} ～ {t.To}\n日別表 {plan.DailyRows}日 / 年間予定 {plan.EventRows}件 / 担当授業 {plan.GroupCount}件 / 考査 {plan.ExamDays}日\n保存値の授業数 {plan.TotalCached} / 再計算 {plan.TotalRecalculated}（一致）\n"+string.Join("\n",counts.Select(c=>plan.Data.GroupName(c.GroupId)+"  "+c.Forecast+"回"))+"\n\n"+string.Join("\n",plan.Warnings);apply.IsEnabled=true;}catch(Exception e){plan=null;apply.IsEnabled=false;Error(e);}}),preview,apply,Btn("取消",w.Close));
+        w.Content=new ScrollViewer{Content=p,VerticalScrollBarVisibility=ScrollBarVisibility.Auto};w.ShowDialog();
     }
     private void Backup()
     {
