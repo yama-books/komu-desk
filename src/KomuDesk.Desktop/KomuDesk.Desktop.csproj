@@ -7,5 +7,5 @@
     <Nullable>enable</Nullable>
     <AssemblyName>KOMU-DESK</AssemblyName>
   </PropertyGroup>
-  <ItemGroup><ProjectReference Include="../KomuDesk.Core/KomuDesk.Core.csproj" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="../KomuDesk.Core/KomuDesk.Core.csproj" /><ProjectReference Include="../KomuDesk.Calendar/KomuDesk.Calendar.csproj" /><PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" /></ItemGroup>
 </Project>
