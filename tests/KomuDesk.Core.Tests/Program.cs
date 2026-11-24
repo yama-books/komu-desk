@@ -70,4 +70,5 @@ try
 }
 finally{Directory.Delete(temp,true);}
 passed+=ImportCases.Run();
+passed+=await CalendarCases.Run();
 Console.WriteLine($"TOTAL {passed} PASS");
