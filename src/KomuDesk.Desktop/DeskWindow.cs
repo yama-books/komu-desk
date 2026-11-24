@@ -155,7 +155,7 @@ internal sealed partial class DeskWindow : Window
             body.Children.Add(cb);
         }
         if(data.Tasks.Count==0) body.Children.Add(Text("タスクなし",13,false,Muted));
-        body.Children.Add(Rule()); body.Children.Add(Btn("授業数集計を開く",Counts));
+        body.Children.Add(Rule()); body.Children.Add(Btn("授業数集計を開く",Counts));body.Children.Add(Btn("授業日一覧・帳票",Reports));
     }
     private void Menu()
     {
@@ -164,7 +164,7 @@ internal sealed partial class DeskWindow : Window
         Item("1  学年・色",Grades); Item("2  クラス・色",Classes); Item("3  科目",Subjects); Item("4  担当授業",Groups);
         Item("5  時程",Bells); Item("6  時間割の版・有効期間",Versions); Item("7  週間時間割",Weekly);
         Item("年度・考査計上・表示",Year); Item("日別変更・個別変更",DayChanges);
-        Item("Googleカレンダー（任意）",GoogleSettings); Item("既存Excelから初期取り込み",ImportExcel); Item("予定",Events); Item("タスク",Tasks); Item("授業数集計",Counts); Item("バックアップ（別ファイル）",Backup);
+        Item("Googleカレンダー（任意）",GoogleSettings); Item("既存Excelから初期取り込み",ImportExcel); Item("予定",Events); Item("タスク",Tasks); Item("授業数集計",Counts); Item("授業日一覧・帳票",Reports); Item("バックアップ（別ファイル）",Backup); Item("バックアップから復元",Restore);
         w.Content=new ScrollViewer { Content=p, VerticalScrollBarVisibility=ScrollBarVisibility.Auto }; w.ShowDialog();
     }
     private Window Dialog(string title,double width=760,double height=500)=>new()
@@ -252,8 +252,10 @@ internal sealed partial class DeskWindow : Window
     }
     private void LessonDetail(Lesson l)
     {
-        var w=Dialog("授業詳細",420,300);var p=new StackPanel{Margin=new Thickness(14)};
+        var w=Dialog("授業詳細",420,380);var p=new StackPanel{Margin=new Thickness(14)};
         Add(p,Text($"{l.Date}  {l.Period}限  {data.GroupName(l.GroupId)}",18,true),Text($"{l.Start}–{l.End}  {l.State}",13,false,Muted),Text("実施記録・メモ"));
+        var previous=data.Actuals.Where(x=>x.GroupId==l.GroupId&&x.Held&&(string.CompareOrdinal(x.Date,l.Date)<0||(x.Date==l.Date&&x.Period<l.Period))&&!string.IsNullOrWhiteSpace(x.Note)).OrderByDescending(x=>x.Date).ThenByDescending(x=>x.Period).FirstOrDefault();
+        if(previous!=null)p.Children.Add(Text("前回 "+previous.Date+"："+previous.Note,12,false,Muted));
         var note=new TextBox{Text=l.Note,AcceptsReturn=true,Height=70,TextWrapping=TextWrapping.Wrap};p.Children.Add(note);
         var a=data.Actuals.Find(x=>x.Date==l.Date&&x.Period==l.Period);
         if(a!=null) Add(p,Btn("メモを保存",()=>{var d=data.Clone();d.Actuals.Single(x=>x.Date==l.Date&&x.Period==l.Period).Note=note.Text;if(Commit(d))w.Close();}));
@@ -263,7 +265,7 @@ internal sealed partial class DeskWindow : Window
             Add(p,Btn("実施済みとして確定",()=>Confirm(true)),Btn("実施しなかったとして確定",()=>Confirm(false)));
         }
         else p.Children.Add(Text("終了時刻を過ぎた授業を確定できます。",12,false,Muted));
-        w.Content=p;w.ShowDialog();
+        w.Content=new ScrollViewer{Content=p,VerticalScrollBarVisibility=ScrollBarVisibility.Auto};w.ShowDialog();
     }
     private void Counts()
     {

@@ -30,6 +30,17 @@ jobs:
         run: |
           if (!(Test-Path publish/KOMU-DESK.exe)) { throw "Missing executable" }
           Get-FileHash publish/KOMU-DESK.exe -Algorithm SHA256
+      - name: Launch and render offline fictional demo
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath (Resolve-Path publish/KOMU-DESK.exe) -ArgumentList @("--smoke", "demo-preview.png") -PassThru
+          if (!$p.WaitForExit(30000)) { $p.Kill(); throw "WPF smoke timed out" }
+          if ($p.ExitCode -ne 0 -or !(Test-Path demo-preview.png)) { throw "WPF smoke failed" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: komu-desk-fictional-demo-image
+          path: demo-preview.png
+          retention-days: 14
       - uses: actions/upload-artifact@v4
         with:
           name: komu-desk-windows-x64-preview
