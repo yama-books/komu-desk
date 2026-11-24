@@ -11,6 +11,7 @@ public sealed class LocalStore
     public SchoolData Load(DateTime today)
     {
         if (!File.Exists(path)) return SchoolData.Empty(today);
+        if (new FileInfo(path).Length > 20_000_000) throw new InvalidDataException("データファイルが大きすぎます。");
         var d = JsonSerializer.Deserialize<SchoolData>(File.ReadAllText(path), Options) ?? throw new InvalidDataException("データを読み込めません。");
         d.Validate();
         return d;
