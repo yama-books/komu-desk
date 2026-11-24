@@ -18,7 +18,7 @@ internal sealed partial class DeskWindow
         var groups=new ComboBox{ItemsSource=new[]{new Choice("","すべて")}.Concat(GroupChoices()).ToArray(),SelectedValuePath="Id",DisplayMemberPath="Label",SelectedIndex=0,MinWidth=160};
         var grid=new DataGrid{AutoGenerateColumns=false,IsReadOnly=true,CanUserAddRows=false,RowHeaderWidth=0};
         foreach(var (label,key) in new[]{("日付","Date"),("時限","Period"),("授業","Group"),("種別","Kind"),("状態","State"),("回次","Number"),("メモ・理由","Note")})grid.Columns.Add(Col(label,key));
-        string? Group()=>groups.SelectedValue as string is string id&&id!=""?id:null;
+        string? Group()=>groups.SelectedValue is string id&&id!=""?id:null;
         (DateTime,DateTime) Range()=>(start.SelectedDate??throw new InvalidOperationException("開始日を選択してください。"),end.SelectedDate??throw new InvalidOperationException("終了日を選択してください。"));
         void Refresh(){try{var(a,b)=Range();grid.ItemsSource=LessonReports.Lines(data,a,b,DateTime.Now,Group());}catch(Exception ex){Error(ex);}}
         void Export()
@@ -37,7 +37,7 @@ internal sealed partial class DeskWindow
             {
                 var(a,b)=Range();var tables=LessonReports.Tables(data,a,b,DateTime.Now,Group());
                 var dlg=new PrintDialog();if(dlg.ShowDialog()!=true)return;
-                var doc=new FlowDocument{FontFamily=FontFamily,FontSize=10,PageWidth=dlg.PrintableAreaWidth,PageHeight=dlg.PrintableAreaHeight,PagePadding=new Thickness(28),ColumnWidth=double.PositiveInfinity};
+                var doc=new FlowDocument{FontFamily=FontFamily,FontSize=10,PageWidth=dlg.PrintableAreaWidth,PageHeight=dlg.PrintableAreaHeight,PagePadding=new Thickness(28),ColumnWidth=Math.Max(100,dlg.PrintableAreaWidth-56)};
                 doc.Blocks.Add(new Paragraph(new Run("KOMU DESK 授業帳票")){FontSize=17,FontWeight=FontWeights.Bold});
                 doc.Blocks.Add(new Paragraph(new Run($"{a:yyyy-MM-dd} ～ {b:yyyy-MM-dd} / 推定は未確定")));
                 foreach(var t in tables)
