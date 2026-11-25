@@ -1,0 +1,5 @@
+# Widget visual revision v0.1.1-preview
+
+Revisit the original monochrome concept. Keep the existing data and actions, but separate the widget from conventional management dialogs. Thin custom header (drag brand; minimize/close; pin and compact controls), separate small date and large time, original-style local cat line art, bordered next-lesson panel with grade/class badges, understated section headings, thin dividers, flat controls, a single agenda with Google provenance, and small footer links for reports. No new runtime network paths or storage schema changes. Existing window size preferences preserved; compact mode remembers normal height. Native window border resizing remains available via WindowChrome. No new font or image dependencies.
+
+Acceptance: existing core cases; Windows demo startup/render; locally inspect readability, drag/resize, minimize/close, topmost/compact, narrow width/DPI and existing data. Actual school-PC verification remains separate. Management dialogs are deliberately unchanged in this pass.
