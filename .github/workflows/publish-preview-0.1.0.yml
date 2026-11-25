@@ -1,0 +1,63 @@
+name: Publish verified Windows preview 0.1.0
+on:
+  push:
+    branches: ['release/app034-preview-0.1.0']
+    paths: ['.github/workflows/publish-preview-0.1.0.yml']
+permissions:
+  actions: read
+  contents: write
+concurrency:
+  group: publish-app034-preview-0.1.0
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.repository == 'yama-books/komu-desk' && github.actor == 'yama-books'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: yama-books/komu-desk
+      RUN_ID: '45312738834'
+      EXPECTED_SHA: '830215969d6421180677518f5dfaace2ccc7f12f'
+      TAG: 'v0.1.0-preview'
+      ARTIFACT: 'komu-desk-windows-x64-preview'
+    steps:
+      - name: Verify existing source and successful run
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$GH_REPO/actions/runs/$RUN_ID" | jq -e --arg sha "$EXPECTED_SHA" '.head_sha == $sha and .status == "completed" and .conclusion == "success"'
+          gh api "repos/$GH_REPO/actions/artifacts/14883474030" | jq -e --arg name "$ARTIFACT" --argjson id "$RUN_ID" '.name == $name and .expired == false and .workflow_run.id == $id'
+          if gh release view "$TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
+            echo "Release already exists; refusing to replace it."
+            exit 1
+          fi
+      - name: Repackage only previously verified build and generate checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p package out
+          gh run download "$RUN_ID" --repo "$GH_REPO" --name "$ARTIFACT" --dir package
+          test -s package/KOMU-DESK.exe
+          test -s package/KOMU-DESK.dll
+          # The build consists solely of published runtime/application files.
+          # No school data, credentials, database or local import files may ship.
+          if find package -type f \( -iname '*.xlsx' -o -iname '*.csv' -o -iname '*.db' -o -iname '*.sqlite*' -o -iname '*.bin' -o -iname '*credentials*' -o -iname '*client_secret*' -o -iname 'data.json' \) | grep -q .; then
+            echo "Unexpected data file"; exit 1
+          fi
+          (cd package && zip -q -r ../out/komu-desk-windows-x64-preview.zip .)
+          (cd out && sha256sum komu-desk-windows-x64-preview.zip > SHA256SUMS.txt)
+      - name: Publish public prerelease, not a stable release
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/preview-notes.md <<'EOF'
+          Windows 11 / x64 自己完結型の未署名評価版。ZIPを展開し KOMU-DESK.exe を起動してください。
+          架空デモは PowerShell で .\KOMU-DESK.exe --demo。
+          実機検収・実Google OAuth・通信監査・印刷検収は未完了。校務PCの利用規則に従い、まず許可された環境で架空データを試してください。名列・出欠は未実装です。
+          Google連携は任意の読み取り専用・手動同期のみ。他機能はローカル処理。正式配布版ではありません。
+          Source: 830215969d6421180677518f5dfaace2ccc7f12f
+          Verified CI: https://github.com/yama-books/komu-desk/actions/runs/45312738834
+          EOF
+          gh release create "$TAG" out/komu-desk-windows-x64-preview.zip out/SHA256SUMS.txt --repo "$GH_REPO" --target "$EXPECTED_SHA" --title "KOMU DESK v0.1.0-preview (Windows x64)" --prerelease --notes-file /tmp/preview-notes.md
+          gh release view "$TAG" --repo "$GH_REPO" --json url,isPrerelease,assets
