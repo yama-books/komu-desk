@@ -22,7 +22,7 @@ internal sealed partial class DeskWindow : Window
     private readonly StackPanel body = new();
     private readonly TextBlock clock = new();
     private readonly TextBlock next = new();
-    private readonly DispatcherTimer timer = new() { Interval=TimeSpan.FromSeconds(1) };
+    private readonly DispatcherTimer timer = new() { Interval=TimeSpan.FromSeconds(5) };
     private bool closing;
     private static readonly Brush Paper = BrushOf("#F7F7F5"), Ink = BrushOf("#202020"), Muted = BrushOf("#606060"), Line = BrushOf("#D4D4D4");
     private static Brush BrushOf(string hex) => (Brush)new BrushConverter().ConvertFromString(hex)!;
@@ -47,30 +47,18 @@ internal sealed partial class DeskWindow : Window
     public DeskWindow(LocalStore store, SchoolData data, bool demo)
     {
         this.store=store; this.data=data; this.demo=demo;
-        Title="KOMU DESK · 校務デスク  v0.1-preview"+(demo?" [DEMO]":"");
+        Title="KOMU DESK · 校務デスク  v0.1.1-preview"+(demo?" [DEMO]":"");
         FontFamily=new FontFamily("Yu Gothic UI, Meiryo, Segoe UI");
-        Background=Paper; Foreground=Ink; MinWidth=280; MinHeight=180;
-        Width=Math.Clamp(data.Display.Width,280,800); Height=Math.Clamp(data.Display.Height,180,1000);
+        Background=Paper; Foreground=Ink; MinWidth=280; MinHeight=235;
+        Width=Math.Clamp(data.Display.Width,280,800); Height=Math.Clamp(data.Display.Height,235,1000);
         Topmost=data.Display.Topmost;
         var work=SystemParameters.WorkArea;
         WindowStartupLocation=WindowStartupLocation.Manual;
         Width=Math.Min(Width,work.Width); Height=Math.Min(Height,work.Height);
         Left=data.Display.Left<0?work.Right-Width-12:Math.Clamp(data.Display.Left,work.Left,Math.Max(work.Left,work.Right-Width));
         Top=data.Display.Top<0?work.Top+12:Math.Clamp(data.Display.Top,work.Top,Math.Max(work.Top,work.Bottom-Height));
-        var root=new DockPanel { Margin=new Thickness(14) };
-        var header=new StackPanel();
-        var brand=new DockPanel();
-        var logo=Text("KOMU DESK  /  校務デスク",12,true); DockPanel.SetDock(logo,Dock.Left); brand.Children.Add(logo);
-        var buttons=Horizontal(); DockPanel.SetDock(buttons,Dock.Right);
-        Add(buttons,Btn("設定",Menu),Btn("📌",ToggleTop),Btn("小",ToggleMini)); brand.Children.Add(buttons);
-        Add(header,brand,clock,next,Rule());
-        clock.FontSize=26; clock.FontWeight=FontWeights.SemiBold; clock.Foreground=Ink;
-        next.Foreground=Muted; next.TextWrapping=TextWrapping.Wrap; next.FontSize=13;
-        DockPanel.SetDock(header,Dock.Top); root.Children.Add(header);
-        var footer=Text(demo?"デモデータ · 保存しません":"ローカル保存 · Googleは任意連携",11,false,Muted);
-        DockPanel.SetDock(footer,Dock.Bottom); root.Children.Add(footer);
-        root.Children.Add(new ScrollViewer { Content=body, VerticalScrollBarVisibility=ScrollBarVisibility.Auto });
-        Content=root;
+        BuildWidget();
+        if(data.Display.Mini)Height=235;
         timer.Tick+=(_,_)=>Tick(); timer.Start();
         Closing+=OnClosing; InitGoogle(); Render(); Tick();
     }
@@ -83,80 +71,20 @@ internal sealed partial class DeskWindow : Window
     private void OnClosing(object? sender, CancelEventArgs e)
     {
         timer.Stop(); if(demo||closing) return;
-        var d=data.Clone(); d.Display.Left=Left; d.Display.Top=Top; d.Display.Width=Width; d.Display.Height=Height;
+        var d=data.Clone(); d.Display.Left=Left; d.Display.Top=Top; d.Display.Width=Width; if(!data.Display.Mini)d.Display.Height=Height;
         try { store.Save(d); closing=true; }
         catch(Exception ex) { Error(ex); e.Cancel=true; timer.Start(); }
     }
     private void ToggleTop() { var d=data.Clone(); d.Display.Topmost=!Topmost; if(Commit(d)) Topmost=d.Display.Topmost; }
-    private void ToggleMini() { var d=data.Clone(); d.Display.Mini=!d.Display.Mini; if(Commit(d)) Height=d.Display.Mini?180:Math.Max(540,d.Display.Height); }
+    private void ToggleMini() { var d=data.Clone(); if(!d.Display.Mini)d.Display.Height=Height; d.Display.Mini=!d.Display.Mini; if(Commit(d)) Height=d.Display.Mini?235:Math.Min(SystemParameters.WorkArea.Height,Math.Max(540,d.Display.Height)); }
     private void Tick()
     {
         var now=DateTime.Now;
-        clock.Text=now.ToString("M月d日（ddd） HH:mm",System.Globalization.CultureInfo.GetCultureInfo("ja-JP"));
-        if(lastToday!=now.Date) { if(day.Date==lastToday) day=now.Date; lastToday=now.Date; Render(); }
-        var list=LessonEngine.Day(data,now.Date,now).Lessons;
-        var active=list.FirstOrDefault(l=>l.State=="remaining"&&now>=now.Date.Add(SchoolData.ParseTime(l.Start))&&now<now.Date.Add(SchoolData.ParseTime(l.End)));
-        var upcoming=list.FirstOrDefault(l=>l.State=="remaining"&&now<now.Date.Add(SchoolData.ParseTime(l.Start)));
-        if(active!=null) next.Text=$"授業中 · {active.Period}限 {data.GroupName(active.GroupId)}";
-        else if(upcoming!=null)
-        {
-            var remaining=now.Date.Add(SchoolData.ParseTime(upcoming.Start))-now;
-            next.Text=$"次の授業 · {upcoming.Period}限 {data.GroupName(upcoming.GroupId)}\nあと {Math.Ceiling(remaining.TotalMinutes):0}分";
-        }
-        else next.Text="本日の次の授業はありません";
-        if(now.Second==0) Render();
+        if(lastToday!=now.Date){if(day.Date==lastToday)day=now.Date;lastToday=now.Date;Render();}
+        var minute=new DateTime(now.Year,now.Month,now.Day,now.Hour,now.Minute,0);
+        if(renderedMinute!=minute){renderedMinute=minute;Render();}
     }
-    private void Render()
-    {
-        body.Children.Clear(); body.Visibility=data.Display.Mini?Visibility.Collapsed:Visibility.Visible;
-        if(data.Display.Mini) return;
-        var dateRow=Horizontal(); var picker=new DatePicker { SelectedDate=day, Width=135, Margin=new Thickness(0,0,4,0) };
-        picker.SelectedDateChanged+=(_,_)=>{ if(picker.SelectedDate.HasValue) { day=picker.SelectedDate.Value.Date; Render(); }};
-        Add(dateRow,Btn("‹",()=>{day=day.AddDays(-1);Render();}),picker,Btn("›",()=>{day=day.AddDays(1);Render();}),Btn("今日",()=>{day=DateTime.Today;Render();})); body.Children.Add(dateRow);
-        var result=LessonEngine.Day(data,day,DateTime.Now);
-        var section=Horizontal(); Add(section,Text("時間割",16,true),Btn("編集",Weekly),Btn("日別変更",DayChanges)); body.Children.Add(section);
-        if(!result.Configured) body.Children.Add(Text("この日の時間割は未設定です。",13,false,Muted));
-        foreach(var n in data.Bells.Select(x=>x.Number).Concat(result.Lessons.Select(x=>x.Period)).Distinct().Order())
-        {
-            var l=result.Lessons.FirstOrDefault(x=>x.Period==n);
-            var b=data.Bells.Find(x=>x.Number==n);
-            if(l==null && !data.Display.ShowFree) continue;
-            var row=new DockPanel { Margin=new Thickness(0,3,0,3) };
-            var prefix=Text($"{n}限  {l?.Start??b?.Start??""}",12,false,Muted); prefix.Width=82; DockPanel.SetDock(prefix,Dock.Left); row.Children.Add(prefix);
-            if(l==null) row.Children.Add(Text("空き",13,false,Muted));
-            else
-            {
-                var state=l.State switch {"confirmed"=>"確定","estimated"=>"推定","cancelled"=>"休講","unresolved"=>"要確認",_=>"予定"};
-                var status=Text(state,11,false,Muted); DockPanel.SetDock(status,Dock.Right); row.Children.Add(status);
-                var group=data.Groups.Find(x=>x.Id==l.GroupId); var cls=data.Classes.Find(x=>x.Id==group?.ClassId); var grade=data.Grades.Find(x=>x.Id==cls?.GradeId);
-                var labels=new WrapPanel { VerticalAlignment=VerticalAlignment.Center };
-                if(grade!=null) labels.Children.Add(Badge(grade.Name,grade.Color));
-                if(cls!=null) labels.Children.Add(Badge(cls.Name,cls.Color));
-                labels.Children.Add(Text(data.Subjects.Find(x=>x.Id==group?.SubjectId)?.Name??"未登録",13));
-                if(l.Kind=="exam") labels.Children.Add(Text(" 考査",11,false,Muted));
-                var button=new Button { Content=labels, HorizontalContentAlignment=HorizontalAlignment.Left, Padding=new Thickness(0), BorderThickness=new Thickness(0), Background=Brushes.Transparent, ToolTip="授業詳細" };
-                button.Click+=(_,_)=>LessonDetail(l); row.Children.Add(button);
-            }
-            body.Children.Add(row);
-        }
-        body.Children.Add(Rule());
-        var er=Horizontal(); Add(er,Text("予定",16,true),Btn("追加・編集",Events)); body.Children.Add(er);
-        var events=data.Events.Where(e=>e.Date==SchoolData.Iso(day)).OrderBy(e=>e.Time).ToList();
-        if(events.Count==0) body.Children.Add(Text("予定なし",13,false,Muted));
-        foreach(var e in events) body.Children.Add(Text($"{(e.Time==""?"終日":e.Time)}   {e.Title}",13));
-        RenderGoogle();
-        body.Children.Add(Rule());
-        var tr=Horizontal(); Add(tr,Text("タスク",16,true),Btn("追加・編集",Tasks)); body.Children.Add(tr);
-        foreach(var t in data.Tasks.OrderBy(t=>t.Done).ThenBy(t=>t.Due==""?"9999":t.Due).ToList())
-        {
-            var label=t.Title+(t.Due==""?"":$"  [{t.Due}]")+(t.Done?"":"");
-            var cb=new CheckBox { Content=Text(label,13,false,t.Done?Muted:Ink), IsChecked=t.Done, Margin=new Thickness(0,5,0,5) };
-            cb.Click+=(_,_)=>{ var d=data.Clone(); d.Tasks.Single(x=>x.Id==t.Id).Done=cb.IsChecked==true; if(!Commit(d)) cb.IsChecked=t.Done; };
-            body.Children.Add(cb);
-        }
-        if(data.Tasks.Count==0) body.Children.Add(Text("タスクなし",13,false,Muted));
-        body.Children.Add(Rule()); body.Children.Add(Btn("授業数集計を開く",Counts));body.Children.Add(Btn("授業日一覧・帳票",Reports));
-    }
+    private void Render()=>RenderWidget();
     private void Menu()
     {
         var w=Dialog("設定・管理",420,560); var p=new StackPanel { Margin=new Thickness(14) };
