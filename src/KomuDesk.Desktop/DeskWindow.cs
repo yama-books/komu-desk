@@ -49,8 +49,8 @@ internal sealed partial class DeskWindow : Window
         this.store=store; this.data=data; this.demo=demo;
         Title="KOMU DESK · 校務デスク  v0.1.1-preview"+(demo?" [DEMO]":"");
         FontFamily=new FontFamily("Yu Gothic UI, Meiryo, Segoe UI");
-        Background=Paper; Foreground=Ink; MinWidth=280; MinHeight=235;
-        Width=Math.Clamp(data.Display.Width,280,800); Height=Math.Clamp(data.Display.Height,235,1000);
+        Background=Paper; Foreground=Ink; MinWidth=280; MinHeight=260;
+        Width=Math.Clamp(data.Display.Width,280,800); Height=Math.Clamp(data.Display.Height,260,1000);
         Topmost=data.Display.Topmost;
         var work=SystemParameters.WorkArea;
         WindowStartupLocation=WindowStartupLocation.Manual;
@@ -58,7 +58,7 @@ internal sealed partial class DeskWindow : Window
         Left=data.Display.Left<0?work.Right-Width-12:Math.Clamp(data.Display.Left,work.Left,Math.Max(work.Left,work.Right-Width));
         Top=data.Display.Top<0?work.Top+12:Math.Clamp(data.Display.Top,work.Top,Math.Max(work.Top,work.Bottom-Height));
         BuildWidget();
-        if(data.Display.Mini)Height=235;
+        if(data.Display.Mini)Height=260;
         timer.Tick+=(_,_)=>Tick(); timer.Start();
         Closing+=OnClosing; InitGoogle(); Render(); Tick();
     }
@@ -76,7 +76,7 @@ internal sealed partial class DeskWindow : Window
         catch(Exception ex) { Error(ex); e.Cancel=true; timer.Start(); }
     }
     private void ToggleTop() { var d=data.Clone(); d.Display.Topmost=!Topmost; if(Commit(d)) Topmost=d.Display.Topmost; }
-    private void ToggleMini() { var d=data.Clone(); if(!d.Display.Mini)d.Display.Height=Height; d.Display.Mini=!d.Display.Mini; if(Commit(d)) Height=d.Display.Mini?235:Math.Min(SystemParameters.WorkArea.Height,Math.Max(540,d.Display.Height)); }
+    private void ToggleMini() { var d=data.Clone(); if(!d.Display.Mini)d.Display.Height=Height; d.Display.Mini=!d.Display.Mini; if(Commit(d)) Height=d.Display.Mini?260:Math.Min(SystemParameters.WorkArea.Height,Math.Max(540,d.Display.Height)); }
     private void Tick()
     {
         var now=DateTime.Now;
