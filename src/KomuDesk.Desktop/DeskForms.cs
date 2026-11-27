@@ -12,11 +12,11 @@ internal sealed partial class DeskWindow
         // Native WPF input templates retain keyboard/IME, selection and date-picker behavior.
         void StyleFor(Type type,params (DependencyProperty Property,object Value)[] values)
         {
-            var s=new Style(type);foreach(var (p,v) in values)s.Setters.Add(new Setter(p,v));app.Resources[type]=s;
+            var s=new Style(type);foreach(var (p,v) in values)s.Setters.Add(new Setter(p,v));if(type==typeof(DatePicker))s.Setters.Add(new EventSetter(FrameworkElement.LoadedEvent,new RoutedEventHandler((sender,_)=>{if(sender is DatePicker picker)StyleCalendarButton(picker);})));app.Resources[type]=s;
         }
         StyleFor(typeof(TextBox),(Control.BackgroundProperty,White),(Control.ForegroundProperty,Ink),(Control.BorderBrushProperty,Line),(Control.PaddingProperty,new Thickness(8,5,8,5)),(FrameworkElement.MinHeightProperty,32.0),(Control.FontSizeProperty,13.0),(Control.VerticalContentAlignmentProperty,VerticalAlignment.Center));
         StyleFor(typeof(ComboBox),(Control.ForegroundProperty,Ink),(Control.BorderBrushProperty,Line),(Control.PaddingProperty,new Thickness(6,4,6,4)),(FrameworkElement.MinHeightProperty,32.0),(Control.FontSizeProperty,13.0));
-        StyleFor(typeof(DatePicker),(Control.ForegroundProperty,Ink),(FrameworkElement.MinHeightProperty,32.0),(Control.FontSizeProperty,13.0));
+        StyleFor(typeof(DatePicker),(Control.ForegroundProperty,Ink),(FrameworkElement.MinHeightProperty,34.0),(Control.FontSizeProperty,13.0));
         StyleFor(typeof(CheckBox),(Control.ForegroundProperty,Ink),(Control.FontSizeProperty,13.0),(FrameworkElement.MinHeightProperty,24.0));
     }
     private static void Field(Panel p,string label,Control input,string? hint=null)
@@ -55,8 +55,10 @@ internal sealed partial class DeskWindow
         Click("保存");if(saved||data.Events.Count!=before)throw new Exception("empty event validation");
         Find<TextBox>("予定名").Text="検査用架空予定";Click("保存");
         if(!saved||data.Events.Count!=before+1||data.Events.Last().Time!="")throw new Exception("event save");
+        before=data.Events.Count;saved=false;Content=EventEditor(DateTime.Today,null,()=>saved=true);UpdateLayout();Find<TextBox>("予定名").Text="架空時刻検査";Click("明日");Click("15:30");Click("保存");if(!saved||data.Events.Count!=before+1||data.Events.Last().Date!=SchoolData.Iso(DateTime.Today.AddDays(1))||data.Events.Last().Time!="15:30")throw new Exception("event shortcut save");
         before=data.Tasks.Count;saved=false;Content=TaskEditor(null,null,()=>saved=true);UpdateLayout();Find<TextBox>("タスク名").Text="検査用架空タスク";Click("保存");
         if(!saved||data.Tasks.Count!=before+1||data.Tasks.Last().Due!="")throw new Exception("task save");
+        before=data.Tasks.Count;saved=false;Content=TaskEditor(null,null,()=>saved=true);UpdateLayout();Find<TextBox>("タスク名").Text="架空期限検査";Click("1週間後");Click("保存");if(!saved||data.Tasks.Count!=before+1||data.Tasks.Last().Due!=SchoolData.Iso(DateTime.Today.AddDays(7)))throw new Exception("task shortcut save");
         agendaFrom=DateTime.Today;agendaTo=DateTime.Today;agendaMode="一覧";Content=BuildManagementContent("calendar");UpdateLayout();
         var query=Find<TextBox>("予定検索");query.Text="検査用架空予定";UpdateLayout();
         var table=Walk(this).OfType<DataGrid>().First();if(table.Items.Count!=1)throw new Exception("agenda search");
@@ -66,12 +68,15 @@ internal sealed partial class DeskWindow
     private FrameworkElement EventEditor(DateTime day,string? id,Action close,Action<Func<bool>>? guard=null)
     {
         var original=id==null?new LocalEvent{Date=SchoolData.Iso(day)}:data.Events.Single(x=>x.Id==id);
-        var title=new TextBox{Text=original.Title};var date=new DatePicker{SelectedDate=SchoolData.ParseDate(original.Date)};
+        var title=new TextBox{Text=original.Title,FontSize=16,MinHeight=40};var date=new DatePicker{SelectedDate=SchoolData.ParseDate(original.Date)};
         var time=new TextBox{Text=original.Time,MaxLength=5};var allDay=new CheckBox{Content="終日",IsChecked=original.Time==""};
         time.IsEnabled=allDay.IsChecked!=true;allDay.Click+=(_,_)=>time.IsEnabled=allDay.IsChecked!=true;
-        var error=Text("",12,false,Muted);var fields=new StackPanel();
-        Field(fields,"予定名",title);Field(fields,"日付",date);fields.Children.Add(allDay);Field(fields,"開始時刻",time,"24時間表記（例 15:30）。終了時刻は登録しません。");fields.Children.Add(error);
+        var error=Text("",12,false,LateTone.Accent);var fields=new StackPanel();
+        var previewTitle=Text("",15,true);var previewDetail=Text("",12,false,LocalTone.Accent);fields.Children.Add(FormPreview("calendar-day",LocalTone,previewTitle,previewDetail));Field(fields,"予定名",title);Field(fields,"日付",date);fields.Children.Add(DateShortcuts(date));fields.Children.Add(allDay);Field(fields,"開始時刻",time,"24時間表記（例 15:30）。終了時刻は登録しません。");var timeButtons=new WrapPanel();foreach(var value in new[]{"08:30","12:00","15:30","17:00"})timeButtons.Children.Add(WidgetButton(value,value,()=>{allDay.IsChecked=false;time.IsEnabled=true;time.Text=value;}));fields.Children.Add(timeButtons);fields.Children.Add(error);
         string CurrentTime()=>allDay.IsChecked==true?"":time.Text.Trim();
+        void Preview(){previewTitle.Text=string.IsNullOrWhiteSpace(title.Text)?"新しい予定":title.Text.Trim();previewDetail.Text=(date.SelectedDate is DateTime x?DayText(x):"日付未選択")+" · "+(allDay.IsChecked==true?"終日":time.Text==""?"時刻未入力":time.Text);error.Text="";}
+        title.TextChanged+=(_,_)=>Preview();date.SelectedDateChanged+=(_,_)=>Preview();time.TextChanged+=(_,_)=>Preview();allDay.Checked+=(_,_)=>Preview();allDay.Unchecked+=(_,_)=>Preview();Preview();
+        title.Loaded+=(_,_)=>{if(!demo)title.Focus();};
         guard?.Invoke(()=>title.Text.Trim()!=original.Title||date.SelectedDate!=SchoolData.ParseDate(original.Date)||CurrentTime()!=original.Time);
         // DatePicker commits native typed date on focus loss; do not silently accept invalid text.
         var actions=new WrapPanel();
@@ -96,9 +101,12 @@ internal sealed partial class DeskWindow
         var title=new TextBox{Text=original.Title};var date=new DatePicker{SelectedDate=original.Due==""?null:SchoolData.ParseDate(original.Due)};
         var noDue=new CheckBox{Content="期限なし",IsChecked=original.Due==""};var done=new CheckBox{Content="完了",IsChecked=original.Done,Margin=new Thickness(0,9,0,0)};
         date.IsEnabled=noDue.IsChecked!=true;noDue.Click+=(_,_)=>date.IsEnabled=noDue.IsChecked!=true;
-        var fields=new StackPanel();var error=Text("",12,false,Muted);
-        Field(fields,"タスク名",title);fields.Children.Add(noDue);Field(fields,"期限",date);Add(fields,done,error);
+        var fields=new StackPanel();var error=Text("",12,false,LateTone.Accent);
+        var previewTitle=Text("",15,true);var previewDetail=Text("",12,false,TaskTone.Accent);fields.Children.Add(FormPreview("tasks",TaskTone,previewTitle,previewDetail));Field(fields,"タスク名",title);fields.Children.Add(noDue);Field(fields,"期限",date);fields.Children.Add(DateShortcuts(date,()=>{noDue.IsChecked=false;date.IsEnabled=true;}));Add(fields,done,error);
         string CurrentDue()=>noDue.IsChecked==true?"":date.SelectedDate.HasValue?SchoolData.Iso(date.SelectedDate.Value):"";
+        void Preview(){previewTitle.Text=string.IsNullOrWhiteSpace(title.Text)?"新しいタスク":title.Text.Trim();previewDetail.Text=(noDue.IsChecked==true?"期限なし":date.SelectedDate is DateTime d?DayText(d):"期限未選択")+(done.IsChecked==true?" · 完了":" · 未完了");error.Text="";}
+        title.TextChanged+=(_,_)=>Preview();date.SelectedDateChanged+=(_,_)=>Preview();noDue.Checked+=(_,_)=>Preview();noDue.Unchecked+=(_,_)=>Preview();done.Checked+=(_,_)=>Preview();done.Unchecked+=(_,_)=>Preview();Preview();
+        title.Loaded+=(_,_)=>{if(!demo)title.Focus();};
         guard?.Invoke(()=>title.Text.Trim()!=original.Title||CurrentDue()!=original.Due||done.IsChecked!=original.Done||(noDue.IsChecked!=true&&!date.SelectedDate.HasValue));
         var actions=new WrapPanel();
         void Save()

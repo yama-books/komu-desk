@@ -190,28 +190,28 @@ internal sealed partial class DeskWindow
         }
         body.Children.Add(Hairline());
         body.Children.Add(Heading("予定 · "+day.ToString("M/d"),WidgetButton(GlyphText("calendar","一覧",14),"カレンダーを開く",OpenAgenda),WidgetButton(Glyph("add",16),"予定追加",()=>EditAgendaEvent(day)),WidgetButton(Glyph("sync",16),"Googleカレンダー設定",GoogleSettings)));
-        var events=data.Events.Where(e=>e.Date==SchoolData.Iso(day)).Select(e=>(Time:e.Time==""?"終日":e.Time,Title:e.Title,Source:"")).ToList();
+        var events=Rows(day,false).Where(r=>r.Source is "local" or "google").ToArray();
         var snapshot=googleState?.Snapshot;
-        if(snapshot!=null&&string.CompareOrdinal(SchoolData.Iso(day),snapshot.From)>=0&&string.CompareOrdinal(SchoolData.Iso(day),snapshot.To)<=0)
-            events.AddRange(snapshot.Events.Where(e=>googleState!.Session.SelectedIds.Contains(e.CalendarId)&&e.OnDate(day)).Select(e=>(e.DisplayTime(day),e.Title,"G")));
-        foreach(var e in events.OrderBy(x=>x.Time=="終日"?0:x.Time=="継続"?1:2).ThenBy(x=>x.Time))
+        foreach(var e in events)
         {
-            var row=new DockPanel{Margin=new Thickness(5,3,5,3)};
-            var t=Small(e.Time);t.Width=62;DockPanel.SetDock(t,Dock.Left);row.Children.Add(t);
-            if(e.Source!=""){var source=Small(e.Source);source.ToolTip="Googleカレンダー";DockPanel.SetDock(source,Dock.Right);row.Children.Add(source);}
-            row.Children.Add(Text(e.Title,13));body.Children.Add(row);
+            var tone=ToneFor(e);var row=new DockPanel{Margin=new Thickness(2,1,2,1)};
+            var mark=ToneMark(tone,19);DockPanel.SetDock(mark,Dock.Left);row.Children.Add(mark);
+            var t=Text(e.Time,11,true,tone.Accent);t.Width=48;DockPanel.SetDock(t,Dock.Left);row.Children.Add(t);
+            var source=Text(e.Source=="google"?"Google":"予定",10,false,tone.Accent);DockPanel.SetDock(source,Dock.Right);row.Children.Add(source);
+            var button=WidgetButton(Text(e.Title,13),e.Title+" · "+tone.Label,()=>OpenAgendaRow(e),false);button.HorizontalContentAlignment=HorizontalAlignment.Left;row.Children.Add(button);body.Children.Add(ToneCard(row,tone));
         }
-        if(events.Count==0)body.Children.Add(Small("予定なし"));
+        if(events.Length==0)body.Children.Add(Small("予定なし"));
         if(googleState!=null){body.Children.Add(Small(googleStatus));if(snapshot!=null)body.Children.Add(Small("最終取得 "+snapshot.LastSuccessUtc.ToLocalTime().ToString("M/d HH:mm")+"（保存済み）"));}
         body.Children.Add(Hairline());
         body.Children.Add(Heading("TASKS",WidgetButton(Glyph("add",16),"タスク追加",()=>EditAgendaTask(null,day))));
         foreach(var task in data.Tasks.OrderBy(t=>t.Done).ThenBy(t=>t.Due==""?"9999":t.Due).ToList())
         {
-            var text=Text(task.Title+(task.Due==""?"":$"  {task.Due}"),13,false,task.Done?Muted:Ink);
+            var tone=task.Done?QuietTone:task.Due!=""&&string.CompareOrdinal(task.Due,SchoolData.Iso(DateTime.Today))<0?LateTone:TaskTone;
+            var text=Text(task.Title,13,false,task.Done?Muted:Ink);
             if(task.Done)text.TextDecorations=TextDecorations.Strikethrough;
-            var cb=new CheckBox{Content=text,IsChecked=task.Done,Margin=new Thickness(5,5,5,5),VerticalContentAlignment=VerticalAlignment.Center};
+            var cb=new CheckBox{IsChecked=task.Done,Margin=new Thickness(4,3,4,3),VerticalContentAlignment=VerticalAlignment.Center,ToolTip="完了を切替"};System.Windows.Automation.AutomationProperties.SetName(cb,task.Title+" 完了切替");
             cb.Click+=(_,_)=>{var d=data.Clone();d.Tasks.Single(x=>x.Id==task.Id).Done=cb.IsChecked==true;if(!Commit(d))cb.IsChecked=task.Done;};
-            body.Children.Add(cb);
+            var row=new DockPanel();DockPanel.SetDock(cb,Dock.Left);row.Children.Add(cb);var details=new StackPanel();Add(details,text,Text(task.Due==""?"期限なし":(tone==LateTone?"期限超過 · ":"期限 · ")+task.Due,10,false,tone.Accent));var edit=WidgetButton(details,task.Title+" 編集",()=>EditAgendaTask(task.Id),false);edit.HorizontalContentAlignment=HorizontalAlignment.Left;row.Children.Add(edit);body.Children.Add(ToneCard(row,tone));
         }
         if(data.Tasks.Count==0)body.Children.Add(Small("タスクなし"));
     }

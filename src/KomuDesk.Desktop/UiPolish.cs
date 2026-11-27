@@ -18,7 +18,7 @@ internal sealed partial class DeskWindow
         var header=new Style(typeof(DataGridColumnHeader));header.Setters.Add(new Setter(Control.BackgroundProperty,Soft));header.Setters.Add(new Setter(Control.ForegroundProperty,Ink));header.Setters.Add(new Setter(Control.PaddingProperty,new Thickness(9,8,9,8)));grid.ColumnHeaderStyle=header;
         return grid;
     }
-    private sealed record ListEntry(AgendaRow Row,DateTime Date,string Time,string Source,string Title,string State);
+    private sealed record ListEntry(AgendaRow Row,DateTime Date,string Time,string Source,string Title,string State,Brush Fill,Brush Accent);
     private FrameworkElement AgendaList(Action<Action> modal)
     {
         var root=new DockPanel();
@@ -28,11 +28,11 @@ internal sealed partial class DeskWindow
         DockPanel.SetDock(top,Dock.Top);root.Children.Add(top);
         var grid=Table();grid.IsReadOnly=true;grid.SelectionMode=DataGridSelectionMode.Single;
         foreach(var (label,key,width) in new[]{("時刻","Time",75),("種類","Source",100),("内容","Title",0),("状態","State",105)})
-        {var col=Col(label,key);col.Width=width==0?new DataGridLength(1,DataGridLengthUnitType.Star):new DataGridLength(width);grid.Columns.Add(col);}
+        {var col=Col(label,key);col.Width=width==0?new DataGridLength(1,DataGridLengthUnitType.Star):new DataGridLength(width);if(key=="Source"){var style=new Style(typeof(DataGridCell));style.Setters.Add(new Setter(Control.BackgroundProperty,new Binding("Fill")));style.Setters.Add(new Setter(Control.ForegroundProperty,new Binding("Accent")));col.CellStyle=style;}grid.Columns.Add(col);}
         VirtualizingPanel.SetIsVirtualizingWhenGrouping(grid,true);VirtualizingPanel.SetVirtualizationMode(grid,VirtualizationMode.Recycling);
         var header=new FrameworkElementFactory(typeof(TextBlock));header.SetBinding(TextBlock.TextProperty,new Binding("Name"){StringFormat="{0:yyyy年M月d日 (ddd)}",ConverterCulture=System.Globalization.CultureInfo.GetCultureInfo("ja-JP")});header.SetValue(TextBlock.FontWeightProperty,FontWeights.SemiBold);header.SetValue(TextBlock.PaddingProperty,new Thickness(9,9,9,5));header.SetValue(TextBlock.BackgroundProperty,Soft);
         var template=new DataTemplate();template.VisualTree=header;grid.GroupStyle.Add(new GroupStyle{HeaderTemplate=template});
-        var all=Agenda.Range(agendaFrom,agendaTo).SelectMany(d=>Rows(d)).Select(r=>new ListEntry(r,r.Day,r.Time,SourceNames[Array.IndexOf(SourceIds,r.Source)],r.Title,StateText(r))).ToArray();
+        var all=Agenda.Range(agendaFrom,agendaTo).SelectMany(d=>Rows(d)).Select(r=>new ListEntry(r,r.Day,r.Time,SourceNames[Array.IndexOf(SourceIds,r.Source)],r.Title,StateText(r),ToneFor(r).Fill,ToneFor(r).Accent)).ToArray();
         void Fill()
         {
             agendaSearch=query.Text;
@@ -65,7 +65,7 @@ internal sealed partial class DeskWindow
         {
             var d=dates[i];var select=WidgetButton(DayText(d),DayText(d),()=>{agendaDate=d;refresh();});select.Margin=new Thickness(2);if(d==agendaDate){select.BorderBrush=Ink;select.Background=Soft;}Put(select,0,i+1);
             var floating=new StackPanel{Margin=new Thickness(2)};
-            foreach(var r in rows[i].Where(r=>!r.StartMinute.HasValue)){var b=WidgetButton(Text(r.Time+" "+r.Title,11),r.Title+" "+StateText(r),()=>modal(()=>OpenAgendaRow(r)));b.Margin=new Thickness(0,1,0,1);floating.Children.Add(b);}
+            foreach(var r in rows[i].Where(r=>!r.StartMinute.HasValue)){var b=WidgetButton(Text(r.Time+" "+r.Title,11),r.Title+" "+StateText(r),()=>modal(()=>OpenAgendaRow(r)));PaintAgenda(b,ToneFor(r));b.Margin=new Thickness(0,1,0,1);floating.Children.Add(b);}
             Put(floating,1,i+1);
             var canvas=new Canvas{Height=(hi-lo)*hour,Width=dayWidth,Background=d==DateTime.Today?Soft:White,ClipToBounds=true};
             for(int h=lo;h<hi;h++){var line=new Border{Width=dayWidth,Height=1,Background=Line};Canvas.SetTop(line,(h-lo)*hour);canvas.Children.Add(line);}
@@ -74,7 +74,7 @@ internal sealed partial class DeskWindow
                 var r=item.Row;double width=(dayWidth-4)/item.Lanes;
                 var p=new StackPanel();var time=r.Time+(r.EndMinute.HasValue?"":" 開始");var t=Text(time,10,true);t.TextWrapping=TextWrapping.NoWrap;Add(p,t,Text(r.Title,11));
                 var b=WidgetButton(p,r.Title+" "+r.Time+(r.EndMinute.HasValue?" ～ "+TimeSpan.FromMinutes(r.EndMinute.Value).ToString(@"hh\:mm"):"（終了時刻なし）")+" "+StateText(r),()=>modal(()=>OpenAgendaRow(r)));
-                b.Background=r.Source=="lesson"?Soft:White;if(!r.EndMinute.HasValue)b.BorderBrush=Muted;b.Margin=new Thickness(0);b.Padding=new Thickness(3,1,3,1);b.MinWidth=0;b.MinHeight=0;b.Width=Math.Max(1,width-2);b.Height=Math.Max(1,(item.End-item.Start)*hour/60-2);b.HorizontalContentAlignment=HorizontalAlignment.Left;b.ClipToBounds=true;
+                PaintAgenda(b,ToneFor(r));b.Margin=new Thickness(0);b.Padding=new Thickness(3,1,3,1);b.MinWidth=0;b.MinHeight=0;b.Width=Math.Max(1,width-2);b.Height=Math.Max(1,(item.End-item.Start)*hour/60-2);b.HorizontalContentAlignment=HorizontalAlignment.Left;b.ClipToBounds=true;
                 Canvas.SetLeft(b,2+item.Lane*width);Canvas.SetTop(b,(item.Start-lo*60)*hour/60);canvas.Children.Add(b);
             }
             Put(canvas,2,i+1);
