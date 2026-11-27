@@ -274,7 +274,7 @@ internal sealed partial class DeskWindow
     private FrameworkElement BuildTimetablePage(Action<Action> modal)
     {
         var p=new StackPanel();Add(p,Text("時間割",24,true));
-        var bar=new WrapPanel();Add(bar,Tool("edit","かんたん時間割入力",()=>modal(PaintWeekly)),Tool("classes","担当授業登録",()=>modal(RegisterGroups)),Tool("bell","特別時程",()=>modal(SpecialProfiles)),Tool("timetable","時間割の版",()=>modal(Versions)),Tool("bell","時程",()=>modal(Bells)),Tool("edit","日別変更",()=>modal(DayChanges)));p.Children.Add(bar);
+        var bar=new WrapPanel();Add(bar,Tool("edit","かんたん時間割入力",()=>modal(PaintWeekly)),Tool("spreadsheet","元Excel時間割",()=>modal(ImportWeeklyFile)),Tool("classes","担当授業登録",()=>modal(RegisterGroups)),Tool("bell","特別時程",()=>modal(SpecialProfiles)),Tool("timetable","時間割の版",()=>modal(Versions)),Tool("bell","時程",()=>modal(Bells)),Tool("edit","日別変更",()=>modal(DayChanges)));p.Children.Add(bar);
         var start=Agenda.WeekStart(agendaDate);var grid=new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(78)});
         for(int i=0;i<7;i++)grid.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(112)});
@@ -361,7 +361,7 @@ internal sealed partial class DeskWindow
     {
         var p=new StackPanel();Add(p,Text("設定",24,true),Text("授業設定・外観・データ管理",12,false,Muted));
         void Group(string name,params (string id,string label,string hint,Action a)[] entries){p.Children.Add(Text(name,14,true));var g=new UniformGrid{Columns=3};foreach(var e in entries)g.Children.Add(Tile(e.id,e.label,e.hint,()=>modal(e.a)));p.Children.Add(g);}
-        Group("授業設定",("classes","学年・色","バッジ",Grades),("classes","クラス・色","バッジ",Classes),("notebook","科目","登録",Subjects),("classes","担当授業","一括登録",RegisterGroups),("classes","担当授業詳細","個別編集",Groups),("bell","特別時程","短縮・変則",SpecialProfiles),("calendar","予定連動ルール","完全一致・自動設定",RuleSettings),("calendar","変更候補","確認・適用",ScheduleReview),("bell","時程","開始・終了",Bells),("timetable","時間割の版","適用期間",Versions));
+        Group("授業設定",("classes","学年・色","バッジ",Grades),("classes","クラス・色","バッジ",Classes),("notebook","科目","登録",Subjects),("classes","担当授業","一括登録",RegisterGroups),("classes","担当授業詳細","個別編集",Groups),("classes","生徒名列","Excel貼付・ローカル暗号化",RosterSettings),("bell","特別時程","短縮・変則",SpecialProfiles),("calendar","予定連動ルール","完全一致・自動設定",RuleSettings),("calendar","変更候補","確認・適用",ScheduleReview),("bell","時程","開始・終了",Bells),("timetable","時間割の版","適用期間",Versions));
         Group("外観・年度",("appearance","年度・表示","考査・空き",Year),("cat","アイコン","10種類",TraySettings));
         Group("データ管理",("spreadsheet","Excel初期移行","既定3シート",ImportExcel),("spreadsheet","Excel予定追加","列指定・プレビュー",ImportMore),("backup","バックアップ","ローカル",Backup),("restore","復元","読込",Restore));
         return PageScroll(p);
