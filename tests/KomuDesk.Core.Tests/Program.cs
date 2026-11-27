@@ -73,4 +73,24 @@ passed+=ImportCases.Run();
 passed+=await CalendarCases.Run();
 passed+=ReportCases.Run();
 passed+=UpdateCases.Run();
+var leap=new DateTime(2028,2,29);
+Equal(Agenda.WeekStart(new DateTime(2026,11,1)),new DateTime(2026,10,26),"agenda Sunday starts Monday");
+Equal(Agenda.WeekStart(monday),monday,"agenda Monday stays");
+Equal(Agenda.Range(new DateTime(2028,2,28),leap.AddDays(1)).Count,3,"agenda leap range inclusive");
+Equal(Agenda.Range(new DateTime(2026,12,31),new DateTime(2027,1,1)).Count,2,"agenda year boundary");
+Equal(Agenda.Range(new DateTime(2028,1,1),new DateTime(2028,12,31)).Count,366,"agenda leap full year");
+try{Agenda.Range(monday,monday.AddDays(366));throw new Exception("range accepted");}catch(ArgumentException){Equal(true,true,"agenda range limit");}
+try{Agenda.Range(tue,monday);throw new Exception("reverse accepted");}catch(ArgumentException){Equal(true,true,"agenda reverse rejected");}
+var agenda=data.Clone();
+agenda.Events.AddRange(new[]{new LocalEvent{Date=SchoolData.Iso(monday),Title="same",Time=""},new LocalEvent{Date=SchoolData.Iso(monday),Title="same",Time=""},new LocalEvent{Date=SchoolData.Iso(monday),Title="timed",Time="10:00"}});
+agenda.Tasks.AddRange(new[]{new Todo{Title="due",Due=SchoolData.Iso(monday)},new Todo{Title="completed",Due=SchoolData.Iso(monday),Done=true},new Todo{Title="no due",Due=""}});
+var view=Agenda.Local(agenda,monday,now);
+Equal(view.Count(r=>r.Source=="local"),3,"agenda preserves same-title events");
+Equal(view[0].Time,"終日","agenda all-day first");
+Equal(view.Count(r=>r.Source=="task"),1,"agenda only due incomplete");
+Equal(Agenda.Local(agenda,monday,now,true).Count(r=>r.Source=="task"),2,"agenda show completed");
+Equal(view.Single(r=>r.Lesson?.State=="confirmed").Lesson!.Note,"fictional note","agenda confirmed record preserved");
+Equal(view.Last().Source,"task","agenda due tasks last");
+Equal(Agenda.Local(closed,tue,now).Count(r=>r.State=="cancelled"),2,"agenda closure state");
+Equal(Agenda.Local(replacement,tue,now).Count(r=>r.Lesson?.Kind=="exam"),1,"agenda exam state");
 Console.WriteLine($"TOTAL {passed} PASS");
