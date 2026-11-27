@@ -16,6 +16,9 @@ internal sealed partial class DeskWindow
     private readonly WrapPanel nextLabels = new();
     private readonly TextBlock footerStatus = new();
     private readonly TextBlock nextTime = new();
+    private DatePicker? widgetDatePicker;
+    private string widgetLessonSignature="";
+    private string WidgetLessonSignature(DateTime now)=>string.Join("|",LessonEngine.Day(data,day,now).Lessons.Select(l=>l.Period+":"+l.State));
     private DateTime renderedMinute = DateTime.MinValue;
     private static readonly Brush Soft = BrushOf("#EFEFEC"), White = BrushOf("#FFFFFF");
     private static ControlTemplate FlatTemplate()
@@ -148,6 +151,7 @@ internal sealed partial class DeskWindow
     }
     private void RenderWidget()
     {
+        widgetLessonSignature=WidgetLessonSignature(DateTime.Now);widgetDatePicker=null;
         body.Children.Clear();body.Visibility=data.Display.Mini?Visibility.Collapsed:Visibility.Visible;
         footerStatus.Text=demo?"架空デモ · 保存なし":googleState==null?"ローカル保存":"ローカル保存 · Google";
         RefreshUpdateNotice();
@@ -158,6 +162,7 @@ internal sealed partial class DeskWindow
         Add(nav,WidgetButton(Glyph("chevron-left",15),"前日",()=>{day=day.AddDays(-1);Render();}),WidgetButton(Glyph("chevron-right",15),"翌日",()=>{day=day.AddDays(1);Render();}),WidgetButton(GlyphText("calendar-today","今日",14),"今日に戻る",()=>{day=DateTime.Today;Render();}));
         dateRow.Children.Add(nav);
         var picker=new DatePicker{SelectedDate=day,Width=126,FontSize=12,BorderThickness=new Thickness(0),Background=Paper,VerticalAlignment=VerticalAlignment.Center};
+        widgetDatePicker=picker;
         picker.SelectedDateChanged+=(_,_)=>{if(picker.SelectedDate.HasValue){day=picker.SelectedDate.Value.Date;Render();}};
         dateRow.Children.Add(picker);body.Children.Add(dateRow);
         body.Children.Add(Heading("TIME TABLE",WidgetButton(GlyphText("edit","編集",14),"週間時間割を編集",Weekly),WidgetButton(GlyphText("edit","変更",14),"日別変更",DayChanges)));
@@ -183,7 +188,7 @@ internal sealed partial class DeskWindow
             body.Children.Add(new Border{Background=ReferenceEquals(l,highlight)&&l!=null?Soft:Brushes.Transparent,CornerRadius=new CornerRadius(5),Padding=new Thickness(5,1,5,1),Child=row});
         }
         body.Children.Add(Hairline());
-        body.Children.Add(Heading("CALENDAR",WidgetButton(GlyphText("calendar","一覧",14),"カレンダーを開く",OpenAgenda),WidgetButton(Glyph("add",16),"予定追加",()=>EditAgendaEvent(day)),WidgetButton(Glyph("sync",16),"Googleカレンダー設定",GoogleSettings)));
+        body.Children.Add(Heading("予定 · "+day.ToString("M/d"),WidgetButton(GlyphText("calendar","一覧",14),"カレンダーを開く",OpenAgenda),WidgetButton(Glyph("add",16),"予定追加",()=>EditAgendaEvent(day)),WidgetButton(Glyph("sync",16),"Googleカレンダー設定",GoogleSettings)));
         var events=data.Events.Where(e=>e.Date==SchoolData.Iso(day)).Select(e=>(Time:e.Time==""?"終日":e.Time,Title:e.Title,Source:"")).ToList();
         var snapshot=googleState?.Snapshot;
         if(snapshot!=null&&string.CompareOrdinal(SchoolData.Iso(day),snapshot.From)>=0&&string.CompareOrdinal(SchoolData.Iso(day),snapshot.To)<=0)
