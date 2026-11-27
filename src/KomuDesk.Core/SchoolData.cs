@@ -16,7 +16,7 @@ public class Todo { public string Id { get; set; } = Guid.NewGuid().ToString("N"
 public class DayChange { public string Date { get; set; } = DateTime.Today.ToString("yyyy-MM-dd"); public bool Closed { get; set; } public int? Weekday { get; set; } public string Reason { get; set; } = ""; }
 public class LessonChange { public string Date { get; set; } = DateTime.Today.ToString("yyyy-MM-dd"); public int Period { get; set; } = 1; public string Action { get; set; } = "cancel"; public string GroupId { get; set; } = ""; public string Kind { get; set; } = "normal"; public string Reason { get; set; } = ""; }
 public class ActualLesson { public string Date { get; set; } = ""; public int Period { get; set; } public string GroupId { get; set; } = ""; public string Kind { get; set; } = "normal"; public string Start { get; set; } = ""; public string End { get; set; } = ""; public bool Held { get; set; } public string Note { get; set; } = ""; }
-public class Preferences { public int TrayIcon { get; set; } = 2; public bool Topmost { get; set; } public bool Mini { get; set; } public bool ShowFree { get; set; } = true; public double Left { get; set; } = -1; public double Top { get; set; } = -1; public double Width { get; set; } = 370; public double Height { get; set; } = 740; }
+public class Preferences { public int UpdateKeepPrevious { get; set; } = 1; public int TrayIcon { get; set; } = 2; public bool Topmost { get; set; } public bool Mini { get; set; } public bool ShowFree { get; set; } = true; public double Left { get; set; } = -1; public double Top { get; set; } = -1; public double Width { get; set; } = 370; public double Height { get; set; } = 740; }
 public class SchoolData
 {
     public int Schema { get; set; } = 1;
