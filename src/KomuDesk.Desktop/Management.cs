@@ -132,12 +132,12 @@ internal sealed partial class DeskWindow
     }
     private void EditAgendaEvent(DateTime d,string? id=null)
     {
-        var w=Dialog(id==null?"予定を追加":"予定を編集",470,450);Action done=w.Close;
+        var w=Dialog(id==null?"予定を追加":"予定を編集",490,570);Action done=w.Close;
         w.Content=EventEditor(d,id,()=>done(),dirty=>done=ProtectDraft(w,dirty));w.ShowDialog();
     }
     private void EditAgendaTask(string? id,DateTime? due=null)
     {
-        var w=Dialog(id==null?"タスク追加":"タスク編集",470,420);Action done=w.Close;
+        var w=Dialog(id==null?"タスク追加":"タスク編集",490,520);Action done=w.Close;
         w.Content=TaskEditor(id,due,()=>done(),dirty=>done=ProtectDraft(w,dirty));w.ShowDialog();
     }
     private void EditDay(DateTime d)
