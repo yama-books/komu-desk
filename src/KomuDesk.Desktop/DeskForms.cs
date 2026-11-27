@@ -82,6 +82,7 @@ internal sealed partial class DeskWindow
             string t=CurrentTime();if(allDay.IsChecked!=true&&Agenda.Minute(t)==null){error.Text="時刻を HH:mm で入力してください。";time.Focus();return;}
             var draft=data.Clone();var item=id==null?new LocalEvent():draft.Events.Single(x=>x.Id==id);item.Title=title.Text.Trim();item.Date=SchoolData.Iso(d);item.Time=t;
             if(id==null)draft.Events.Add(item);
+            ApplyAutomatic(draft);
             if(Commit(draft))close();
         }
         var save=Primary("save","保存",Save);save.IsDefault=true;actions.Children.Add(save);

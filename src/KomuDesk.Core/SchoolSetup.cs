@@ -104,7 +104,7 @@ public static class SchoolSetup
             var profiles2=matches.Select(x=>x.Rule.ProfileId).Where(x=>x!="").Distinct().ToArray();
             bool closed=matches.Any(x=>x.Rule.Closed);
             string iso=SchoolData.Iso(date);
-            string block=date<today.Date?"過去の日程は自動変更しません。":
+            string block=date<today.Date?"過去の日程は変更候補としてのみ表示":
                 date<SchoolData.ParseDate(d.YearFrom)||date>SchoolData.ParseDate(d.YearTo)?"年度外":
                 d.Actuals.Any(x=>x.Date==iso)?"確定済み授業あり":
                 d.Days.Any(x=>x.Date==iso)||d.Changes.Any(x=>x.Date==iso)?"既存の日別・個別変更あり":
@@ -157,6 +157,25 @@ public static class EventImport
             }
             catch(Exception e)when(e is InvalidDataException or FormatException or ArgumentException){output.Add(new(number,"","","","要確認: "+e.Message));}
         }
+        return Classify(d,candidates,output);
+    }
+    public static IReadOnlyList<EventImportRow> Paste(SchoolData d,string text)
+    {
+        if(text.Length>2_000_000)throw new InvalidDataException("貼り付けが大きすぎます。");
+        var candidates=new List<(int Row,string Date,string Title,string Time)>();var errors=new List<EventImportRow>();
+        var lines=text.Replace("\r\n","\n").Split('\n');if(lines.Length>10000)throw new InvalidDataException("予定は1万行までです。");
+        for(int i=0;i<lines.Length;i++)
+        {
+            var line=lines[i].TrimEnd('\r');if(string.IsNullOrWhiteSpace(line))continue;
+            var cols=line.Split('\t');
+            if(cols.Length is <2 or >3||!DateTime.TryParseExact(cols[0].Trim(),new[]{"yyyy-MM-dd","yyyy/M/d","yyyy/MM/dd"},CultureInfo.InvariantCulture,DateTimeStyles.None,out var date)||cols[1].Trim()==""||(cols.Length==3&&cols[2].Trim()!=""&&Agenda.Minute(cols[2].Trim())==null))
+            {errors.Add(new(i+1,"","","","要確認: 日付・予定名・時刻を確認"));continue;}
+            candidates.Add((i+1,SchoolData.Iso(date),cols[1].Trim(),cols.Length==3?cols[2].Trim():""));
+        }
+        return Classify(d,candidates,errors);
+    }
+    private static IReadOnlyList<EventImportRow> Classify(SchoolData d,List<(int Row,string Date,string Title,string Time)> candidates,List<EventImportRow> output)
+    {
         var existing=d.Events.GroupBy(e=>(e.Date,e.Title,e.Time)).ToDictionary(g=>g.Key,g=>g.Count());
         var seen=new Dictionary<(string,string,string),int>();
         foreach(var row in candidates)

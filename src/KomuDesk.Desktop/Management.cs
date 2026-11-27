@@ -171,7 +171,9 @@ internal sealed partial class DeskWindow
     }
     private FrameworkElement BuildAgenda(Action refresh,Action<Action> modal)
     {
-        var outer=new DockPanel();var header=new StackPanel();
+        var outer=new DockPanel{AllowDrop=!demo};var header=new StackPanel();
+        outer.DragOver+=(_,e)=>{e.Effects=e.Data.GetData(System.Windows.DataFormats.FileDrop) is string[] a&&a.Length==1&&System.IO.Path.GetExtension(a[0]).Equals(".xlsx",StringComparison.OrdinalIgnoreCase)?DragDropEffects.Copy:DragDropEffects.None;e.Handled=true;};
+        outer.Drop+=(_,e)=>{if(!demo&&e.Data.GetData(System.Windows.DataFormats.FileDrop) is string[] a&&a.Length==1&&System.IO.Path.GetExtension(a[0]).Equals(".xlsx",StringComparison.OrdinalIgnoreCase))modal(()=>ImportEventsFile(a[0]));e.Handled=true;};
         Add(header,Text("カレンダー",24,true));
         var toolbar=new WrapPanel();
         void Shift(int n){agendaDate=agendaMode=="月"?agendaDate.AddMonths(n):agendaDate.AddDays(n*(agendaMode=="週"?7:1));if(agendaMode=="一覧"){int length=(agendaTo-agendaFrom).Days+1;agendaFrom=agendaFrom.AddDays(n*length);agendaTo=agendaTo.AddDays(n*length);agendaDate=agendaFrom;}refresh();}
@@ -180,7 +182,7 @@ internal sealed partial class DeskWindow
         pick.SelectedDateChanged+=(_,_)=>{if(pick.SelectedDate is DateTime d){agendaDate=d.Date;if(agendaMode=="一覧"){agendaFrom=d;agendaTo=d.AddDays(30);}refresh();}};toolbar.Children.Add(pick);
         foreach(var pair in new[]{("月","calendar-month"),("週","calendar-week"),("日","calendar-day"),("一覧","calendar-list")})
         {var b=Tool(pair.Item2,pair.Item1,()=>{agendaMode=pair.Item1;refresh();});if(agendaMode==pair.Item1){b.Background=Soft;b.BorderBrush=Ink;}toolbar.Children.Add(b);}
-        Add(toolbar,Tool("sync","同期",()=>modal(GoogleSettings)),Tool("spreadsheet","Excel予定",()=>modal(ImportMore)),Tool("calendar","変更候補",()=>modal(ScheduleReview)),Tool("add","予定",()=>modal(()=>EditAgendaEvent(agendaDate))));
+        Add(toolbar,Tool("sync","同期",()=>modal(GoogleSettings)),Tool("spreadsheet","Excel予定",()=>modal(ImportMore)),Tool("spreadsheet","予定貼付",()=>modal(PasteEvents)),Tool("calendar","変更候補",()=>modal(ScheduleReview)),Tool("add","予定",()=>modal(()=>EditAgendaEvent(agendaDate))));
         header.Children.Add(toolbar);
         var filters=new WrapPanel{Margin=new Thickness(0,5,0,5)};filters.Children.Add(Glyph("filter",18));
         for(int i=0;i<SourceIds.Length;i++){int n=i;var cb=new CheckBox{Content=SourceNames[i],IsChecked=agendaSources[i],Margin=new Thickness(5),VerticalContentAlignment=VerticalAlignment.Center};cb.Click+=(_,_)=>{agendaSources[n]=cb.IsChecked==true;refresh();};filters.Children.Add(cb);}

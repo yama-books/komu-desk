@@ -79,6 +79,17 @@ internal sealed partial class DeskWindow
         var dialog=new OpenFileDialog{Filter="Excel (*.xlsx)|*.xlsx",CheckFileExists=true};
         if(dialog.ShowDialog(management??this)!=true)return;ImportEventsFile(dialog.FileName);
     }
+    private void PasteEvents()
+    {
+        if(demo)return;
+        var w=Dialog("予定表の貼り付け",760,610);var root=new DockPanel{Margin=new Thickness(12)};
+        var top=new StackPanel();Add(top,Text("Excelから予定を貼り付け",20,true),Text("日付・予定名・任意の時刻の順。見出しは除いてコピーしてください。",12,false,Muted));var input=new TextBox{Text=System.Windows.Clipboard.GetText(),AcceptsReturn=true,AcceptsTab=true,Height=100,VerticalScrollBarVisibility=ScrollBarVisibility.Auto};top.Children.Add(input);
+        var grid=Table();grid.IsReadOnly=true;foreach(var (label,key) in new[]{("行","Row"),("日付","Date"),("予定名","Title"),("時刻","Time"),("判定","Status")})grid.Columns.Add(Col(label,key));
+        IReadOnlyList<EventImportRow>? rows=null;var status=Text("",12,false,Muted);Button? apply=null;
+        void Preview(){try{rows=EventImport.Paste(data,input.Text);grid.ItemsSource=rows;status.Text="追加 "+rows.Count(r=>r.Status=="追加")+" / 既存 "+rows.Count(r=>r.Status=="既存")+" / 要確認 "+rows.Count(r=>r.Status.StartsWith("要確認"));apply!.IsEnabled=rows.Any(r=>r.Status=="追加");}catch(Exception ex){Error(ex);}}
+        input.TextChanged+=(_,_)=>{rows=null;grid.ItemsSource=null;apply!.IsEnabled=false;status.Text="再プレビューしてください。";};Add(top,Tool("spreadsheet","プレビュー",Preview),status);DockPanel.SetDock(top,Dock.Top);root.Children.Add(top);
+        var bar=new WrapPanel();apply=Primary("save","追加のみ取り込む",()=>{if(rows==null)return;var draft=data.Clone();int n=EventImport.Add(draft,rows);int automatic=ApplyAutomatic(draft);if(MessageBox.Show(w,$"{n}件を追加・自動ルール {automatic}日。よろしいですか？","確認",MessageBoxButton.YesNo)!=MessageBoxResult.Yes)return;if(Commit(draft)){w.Close();ScheduleReview();}});apply.IsEnabled=false;Add(bar,apply,Tool("close","取消",w.Close));DockPanel.SetDock(bar,Dock.Bottom);root.Children.Add(bar);root.Children.Add(grid);w.Content=root;w.ShowDialog();
+    }
     private void ImportEventsFile(string path)
     {
         try
@@ -105,7 +116,7 @@ internal sealed partial class DeskWindow
     private void SpecialProfiles()
     {
         var w=Dialog("特別時程",680,610);var root=new DockPanel{Margin=new Thickness(12)};var draft=data.Clone();
-        var selector=new ComboBox{DisplayMemberPath="Name",ItemsSource=draft.BellProfiles};var name=new TextBox();var grid=Table();grid.Columns.Add(Col("時限","Number"));grid.Columns.Add(Col("開始","Start"));grid.Columns.Add(Col("終了","End"));
+        var selector=new ComboBox{DisplayMemberPath="Name",ItemsSource=draft.BellProfiles};var name=new TextBox();var grid=Table();grid.SelectionMode=DataGridSelectionMode.Extended;grid.Columns.Add(Col("時限","Number"));grid.Columns.Add(Col("開始","Start"));grid.Columns.Add(Col("終了","End"));
         BellProfile? item=null;var rows=new System.Collections.ObjectModel.ObservableCollection<Bell>();grid.ItemsSource=rows;
         void Load(BellProfile p){item=p;name.Text=p.Name;rows.Clear();foreach(var b in p.Bells)rows.Add(new Bell{Number=b.Number,Start=b.Start,End=b.End});}
         selector.SelectionChanged+=(_,_)=>{if(selector.SelectedItem is BellProfile p)Load(p);};

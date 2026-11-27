@@ -8,7 +8,7 @@ public static class LegacyImport
     public const string EventsSheet = "年間予定(Google用貼付)";
     public const string TimetableSheet = "時間割（入力）";
     public const string DailySheet = "実施授業";
-    public static bool IsEmpty(SchoolData d)=>d.Grades.Count==0&&d.Classes.Count==0&&d.Subjects.Count==0&&d.Groups.Count==0&&d.Events.Count==0&&d.Tasks.Count==0&&d.Days.Count==0&&d.Changes.Count==0&&d.Actuals.Count==0&&d.Timetables.All(t=>t.Slots.Count==0);
+    public static bool IsEmpty(SchoolData d)=>d.BellProfiles.Count==0&&d.ScheduleRules.Count==0&&d.Grades.Count==0&&d.Classes.Count==0&&d.Subjects.Count==0&&d.Groups.Count==0&&d.Events.Count==0&&d.Tasks.Count==0&&d.Days.Count==0&&d.Changes.Count==0&&d.Actuals.Count==0&&d.Timetables.All(t=>t.Slots.Count==0);
     private static string Get(Dictionary<string,LegacyWorkbook.Cell> row,string col,bool strict=true)
     {
         if(!row.TryGetValue(col,out var c))return "";
