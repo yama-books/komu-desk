@@ -91,13 +91,13 @@ internal sealed partial class DeskWindow
         if(s==null)return "Google：未取得 / "+googleStatus;
         return "Google：最終取得 "+s.LastSuccessUtc.ToLocalTime().ToString("M/d HH:mm")+" / "+(string.CompareOrdinal(SchoolData.Iso(date),s.From)<0||string.CompareOrdinal(SchoolData.Iso(date),s.To)>0?"同期範囲外":googleStatus);
     }
-    private IReadOnlyList<AgendaRow> Rows(DateTime d)
+    private IReadOnlyList<AgendaRow> Rows(DateTime d,bool filtered=true)
     {
         var rows=Agenda.Local(data,d,DateTime.Now,showCompleted).ToList();
         var s=googleState?.Snapshot;
         if(s!=null&&googleState!=null&&string.CompareOrdinal(SchoolData.Iso(d),s.From)>=0&&string.CompareOrdinal(SchoolData.Iso(d),s.To)<=0)
             rows.AddRange(s.Events.Where(e=>googleState.Session.SelectedIds.Contains(e.CalendarId)&&e.OnDate(d)).Select(e=>new AgendaRow(d.Date,"google",e.CalendarId+":"+e.Id+":"+e.Start,e.Title,e.DisplayTime(d),e.AllDay?0:e.DisplayTime(d)=="継続"?1:2)));
-        return Agenda.Sort(rows.Where(r=>agendaSources[Array.IndexOf(SourceIds,r.Source)]));
+        return Agenda.Sort(rows.Where(r=>!filtered||agendaSources[Array.IndexOf(SourceIds,r.Source)]));
     }
     private static string StateText(AgendaRow r)=>r.Source=="lesson"?(r.Lesson?.Kind=="exam"?"考査 · ":"")+(r.State switch{"confirmed"=>"確定","estimated"=>"推定","cancelled"=>"休講","unresolved"=>"要確認",_=>"予定"}):r.Source=="task"?(r.State=="done"?"完了":"未完了"):r.Source=="google"?"Google · 読取専用":"ローカル";
     private static string SourceIcon(string source)=>source switch{"lesson"=>"timetable","task"=>"tasks","google"=>"connection",_=>"calendar"};
@@ -138,6 +138,22 @@ internal sealed partial class DeskWindow
         if(id!=null)bar.Children.Add(Tool("trash","削除",()=>{if(MessageBox.Show(w,"このタスクを削除しますか？","確認",MessageBoxButton.YesNo)!=MessageBoxResult.Yes)return;draft.Tasks.Remove(item);if(Commit(draft))w.Close();}));
         Add(p,Text("タスク名"),title,Text("期限（空欄可）"),date,done,bar);w.Content=p;w.ShowDialog();
     }
+    private void EditDay(DateTime d)
+    {
+        var draft=data.Clone();var date=SchoolData.Iso(d);var item=draft.Days.SingleOrDefault(x=>x.Date==date);
+        var w=Dialog("日別変更 · "+DayText(d),460,360);var p=new StackPanel{Margin=new Thickness(16)};
+        var closed=new CheckBox{Content="この日は全休",IsChecked=item?.Closed==true,Margin=new Thickness(0,8,0,8)};
+        var choices=new ComboBox{ItemsSource=new[]{"通常曜日","日曜日","月曜日","火曜日","水曜日","木曜日","金曜日","土曜日"},SelectedIndex=item?.Weekday is int n?n+1:0,MinHeight=32};
+        var reason=new TextBox{Text=item?.Reason??"",MinHeight=32};
+        var actions=new WrapPanel();
+        Add(actions,Tool("save","保存",()=>{
+            draft.Days.RemoveAll(x=>x.Date==date);
+            if(closed.IsChecked==true||choices.SelectedIndex>0||reason.Text.Trim()!="")draft.Days.Add(new DayChange{Date=date,Closed=closed.IsChecked==true,Weekday=choices.SelectedIndex>0?choices.SelectedIndex-1:null,Reason=reason.Text.Trim()});
+            if(Commit(draft))w.Close();
+        }),Tool("close","取消",w.Close),Tool("edit","個別時限・一括変更",()=>{w.Close();DayChanges();}));
+        Add(p,Text(DayText(d),18,true),Text("曜日を変更する場合だけ選択してください。既存確定実績は変更しません。",12,false,Muted),closed,Text("適用曜日"),choices,Text("理由"),reason,actions);
+        w.Content=PageScroll(p);w.ShowDialog();
+    }
     private FrameworkElement DayDetail(DateTime d,Action<Action> modal)
     {
         var p=new StackPanel();Add(p,Text(DayText(d),18,true),Text(GoogleSummary(d),11,false,Muted));
@@ -145,7 +161,7 @@ internal sealed partial class DeskWindow
         var rows=Rows(d);
         if(rows.Count==0)p.Children.Add(Text("表示する予定はありません。",13,false,Muted));
         foreach(var r in rows)p.Children.Add(AgendaLine(r,modal));
-        var actions=new WrapPanel();Add(actions,Tool("add","予定追加",()=>modal(()=>EditAgendaEvent(d))),Tool("edit","日別変更",()=>modal(DayChanges)),Tool("add","タスク",()=>modal(()=>EditAgendaTask(null,d))));p.Children.Add(actions);
+        var actions=new WrapPanel();Add(actions,Tool("add","予定追加",()=>modal(()=>EditAgendaEvent(d))),Tool("edit","日別変更",()=>modal(()=>EditDay(d))),Tool("add","タスク",()=>modal(()=>EditAgendaTask(null,d))));p.Children.Add(actions);
         return CardBox(p);
     }
     private FrameworkElement BuildAgenda(Action refresh,Action<Action> modal)
@@ -221,7 +237,7 @@ internal sealed partial class DeskWindow
         foreach(var section in new[]{("今日の授業",new[]{"lesson"}),("今日の予定",new[]{"local","google"})})
         {
             var card=new StackPanel();Add(card,Text(section.Item1,16,true));
-            var rows=Rows(DateTime.Today).Where(r=>section.Item2.Contains(r.Source)).ToArray();
+            var rows=Rows(DateTime.Today,false).Where(r=>section.Item2.Contains(r.Source)).ToArray();
             if(rows.Length==0)card.Children.Add(Text("表示する項目はありません。",12,false,Muted));
             foreach(var r in rows)card.Children.Add(AgendaLine(r,modal));
             daily.Children.Add(CardBox(card));
