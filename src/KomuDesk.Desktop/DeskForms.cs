@@ -12,12 +12,11 @@ internal sealed partial class DeskWindow
         // Native WPF input templates retain keyboard/IME, selection and date-picker behavior.
         void StyleFor(Type type,params (DependencyProperty Property,object Value)[] values)
         {
-            var s=new Style(type);foreach(var (p,v) in values)s.Setters.Add(new Setter(p,v));app.Resources[type]=s;
+            var s=new Style(type);foreach(var (p,v) in values)s.Setters.Add(new Setter(p,v));if(type==typeof(DatePicker))s.Setters.Add(new EventSetter(FrameworkElement.LoadedEvent,new RoutedEventHandler((sender,_)=>{if(sender is DatePicker picker)StyleCalendarButton(picker);})));app.Resources[type]=s;
         }
         StyleFor(typeof(TextBox),(Control.BackgroundProperty,White),(Control.ForegroundProperty,Ink),(Control.BorderBrushProperty,Line),(Control.PaddingProperty,new Thickness(8,5,8,5)),(FrameworkElement.MinHeightProperty,32.0),(Control.FontSizeProperty,13.0),(Control.VerticalContentAlignmentProperty,VerticalAlignment.Center));
         StyleFor(typeof(ComboBox),(Control.ForegroundProperty,Ink),(Control.BorderBrushProperty,Line),(Control.PaddingProperty,new Thickness(6,4,6,4)),(FrameworkElement.MinHeightProperty,32.0),(Control.FontSizeProperty,13.0));
         StyleFor(typeof(DatePicker),(Control.ForegroundProperty,Ink),(FrameworkElement.MinHeightProperty,34.0),(Control.FontSizeProperty,13.0));
-        ((Style)app.Resources[typeof(DatePicker)]).Setters.Add(new EventSetter(FrameworkElement.LoadedEvent,new RoutedEventHandler((sender,_)=>{if(sender is DatePicker picker)StyleCalendarButton(picker);})));
         StyleFor(typeof(CheckBox),(Control.ForegroundProperty,Ink),(Control.FontSizeProperty,13.0),(FrameworkElement.MinHeightProperty,24.0));
     }
     private static void Field(Panel p,string label,Control input,string? hint=null)
