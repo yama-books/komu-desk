@@ -3,14 +3,16 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationIcon>Assets/Tray/cat-02.ico</ApplicationIcon>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>KOMU-DESK</AssemblyName>
-    <Version>0.1.5-preview</Version>
-    <AssemblyVersion>0.1.5.0</AssemblyVersion>
-    <FileVersion>0.1.5.0</FileVersion>
+    <Version>0.1.6-preview</Version>
+    <AssemblyVersion>0.1.6.0</AssemblyVersion>
+    <FileVersion>0.1.6.0</FileVersion>
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="../KomuDesk.Core/KomuDesk.Core.csproj" /><ProjectReference Include="../KomuDesk.Calendar/KomuDesk.Calendar.csproj" /><PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" /></ItemGroup>
-  <ItemGroup><Resource Include="Assets/Icons/*.png" /></ItemGroup>
+  <ItemGroup><Resource Include="Assets/Icons/*.png" /><Resource Include="Assets/Tray/*.png" /><Resource Include="Assets/Tray/*.ico" /><Using Remove="System.Windows.Forms" /><Using Remove="System.Drawing" /></ItemGroup>
   <ItemGroup Condition="'$(KomuDeskOAuthConfig)' != ''"><EmbeddedResource Include="$(KomuDeskOAuthConfig)" LogicalName="KomuDesk.GoogleDesktopOAuth" /></ItemGroup>
 </Project>
