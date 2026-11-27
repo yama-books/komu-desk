@@ -36,6 +36,17 @@ jobs:
           $p = Start-Process -FilePath (Resolve-Path publish/KOMU-DESK.exe) -ArgumentList @("--smoke", "demo-preview.png") -PassThru
           if (!$p.WaitForExit(30000)) { $p.Kill(); throw "WPF smoke timed out" }
           if ($p.ExitCode -ne 0 -or !(Test-Path demo-preview.png)) { throw "WPF smoke failed" }
+      - name: Render settings bento menu with embedded icons
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath (Resolve-Path publish/KOMU-DESK.exe) -ArgumentList @("--smoke", "menu-preview.png", "--menu-preview") -PassThru
+          if (!$p.WaitForExit(30000)) { $p.Kill(); throw "Bento smoke timed out" }
+          if ($p.ExitCode -ne 0 -or !(Test-Path menu-preview.png)) { throw "Bento smoke failed" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: komu-desk-bento-menu-image
+          path: menu-preview.png
+          retention-days: 14
       - uses: actions/upload-artifact@v4
         with:
           name: komu-desk-fictional-demo-image

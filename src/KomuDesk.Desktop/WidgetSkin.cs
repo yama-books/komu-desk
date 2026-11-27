@@ -20,28 +20,57 @@ internal sealed partial class DeskWindow
     private static readonly Brush Soft = BrushOf("#EFEFEC"), White = BrushOf("#FFFFFF");
     private static ControlTemplate FlatTemplate()
     {
-        var border = new FrameworkElementFactory(typeof(Border), "face");
-        border.SetValue(Border.CornerRadiusProperty,new CornerRadius(5));
-        border.SetBinding(Border.BackgroundProperty,new Binding("Background"){RelativeSource=RelativeSource.TemplatedParent});
-        border.SetBinding(Border.BorderBrushProperty,new Binding("BorderBrush"){RelativeSource=RelativeSource.TemplatedParent});
-        border.SetBinding(Border.BorderThicknessProperty,new Binding("BorderThickness"){RelativeSource=RelativeSource.TemplatedParent});
-        var presenter=new FrameworkElementFactory(typeof(ContentPresenter));
-        presenter.SetBinding(FrameworkElement.MarginProperty,new Binding("Padding"){RelativeSource=RelativeSource.TemplatedParent});
-        presenter.SetBinding(FrameworkElement.HorizontalAlignmentProperty,new Binding("HorizontalContentAlignment"){RelativeSource=RelativeSource.TemplatedParent});
-        presenter.SetValue(FrameworkElement.VerticalAlignmentProperty,VerticalAlignment.Center);
-        border.AppendChild(presenter);
-        var template=new ControlTemplate(typeof(Button)){VisualTree=border};
-        var hover=new Trigger{Property=UIElement.IsMouseOverProperty,Value=true};hover.Setters.Add(new Setter(Border.BackgroundProperty,Soft,"face"));template.Triggers.Add(hover);
-        var pressed=new Trigger{Property=ButtonBase.IsPressedProperty,Value=true};pressed.Setters.Add(new Setter(Border.BackgroundProperty,Line,"face"));template.Triggers.Add(pressed);
-        var focus=new Trigger{Property=UIElement.IsKeyboardFocusedProperty,Value=true};focus.Setters.Add(new Setter(Border.BorderBrushProperty,Muted,"face"));focus.Setters.Add(new Setter(Border.BorderThicknessProperty,new Thickness(1),"face"));template.Triggers.Add(focus);
-        return template;
+        // State-driven, short motion on the painted face, never the hit area.
+        var transition=SystemParameters.ClientAreaAnimation?"0:0:0.12":"0:0:0";
+        var press=SystemParameters.ClientAreaAnimation?"0:0:0.07":"0:0:0";
+        var scale=SystemParameters.ClientAreaAnimation?"0.98":"1";
+        var shift=SystemParameters.ClientAreaAnimation?"1":"0";
+        return (ControlTemplate)System.Windows.Markup.XamlReader.Parse($$"""
+        <ControlTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" TargetType="Button">
+          <Grid Background="Transparent" SnapsToDevicePixels="True">
+            <VisualStateManager.VisualStateGroups>
+              <VisualStateGroup x:Name="CommonStates">
+                <VisualStateGroup.Transitions>
+                  <VisualTransition GeneratedDuration="{{transition}}" />
+                  <VisualTransition To="Pressed" GeneratedDuration="{{press}}" />
+                </VisualStateGroup.Transitions>
+                <VisualState x:Name="Normal"/>
+                <VisualState x:Name="MouseOver">
+                  <Storyboard><DoubleAnimation Storyboard.TargetName="wash" Storyboard.TargetProperty="Opacity" To="0.06" Duration="0"/></Storyboard>
+                </VisualState>
+                <VisualState x:Name="Pressed">
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="wash" Storyboard.TargetProperty="Opacity" To="0.13" Duration="0"/>
+                    <DoubleAnimation Storyboard.TargetName="face" Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleX)" To="{{scale}}" Duration="0"/>
+                    <DoubleAnimation Storyboard.TargetName="face" Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleY)" To="{{scale}}" Duration="0"/>
+                    <DoubleAnimation Storyboard.TargetName="face" Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[1].(TranslateTransform.Y)" To="{{shift}}" Duration="0"/>
+                  </Storyboard>
+                </VisualState>
+                <VisualState x:Name="Disabled">
+                  <Storyboard><DoubleAnimation Storyboard.TargetName="face" Storyboard.TargetProperty="Opacity" To="0.48" Duration="0"/></Storyboard>
+                </VisualState>
+              </VisualStateGroup>
+            </VisualStateManager.VisualStateGroups>
+            <Grid x:Name="face" RenderTransformOrigin="0.5,0.5">
+              <Grid.RenderTransform><TransformGroup><ScaleTransform/><TranslateTransform/></TransformGroup></Grid.RenderTransform>
+              <Border x:Name="outline" CornerRadius="8" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"/>
+              <Border x:Name="wash" Background="#202020" CornerRadius="8" Opacity="0" IsHitTestVisible="False"/>
+              <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center" RecognizesAccessKey="True"/>
+            </Grid>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="outline" Property="BorderBrush" Value="#555555"/><Setter TargetName="outline" Property="BorderThickness" Value="2"/></Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+        """);
     }
     private static readonly ControlTemplate Flat = FlatTemplate();
     private static Button WidgetButton(object label, string tip, Action action, bool compact=true)
     {
-        var b=new Button {Content=label,ToolTip=tip,Template=Flat,Foreground=Muted,Background=Brushes.Transparent,
-            BorderBrush=Brushes.Transparent,BorderThickness=new Thickness(1),Padding=new Thickness(compact?5:8,3,compact?5:8,3),
-            MinHeight=26,Margin=new Thickness(1,0,1,0),FontSize=12,HorizontalContentAlignment=HorizontalAlignment.Center,
+        var b=new Button {Content=label,ToolTip=tip,Template=Flat,Foreground=Ink,Background=compact?White:Brushes.Transparent,
+            BorderBrush=compact?Line:Brushes.Transparent,BorderThickness=new Thickness(1),Padding=new Thickness(compact?5:8,4,compact?5:8,4),
+            MinHeight=28,Margin=new Thickness(1,0,1,0),FontSize=12,HorizontalContentAlignment=HorizontalAlignment.Center,
             Cursor=System.Windows.Input.Cursors.Hand};
         System.Windows.Automation.AutomationProperties.SetName(b,tip);
         b.Click+=(_,_)=>action();return b;
@@ -54,15 +83,7 @@ internal sealed partial class DeskWindow
         var tools=Horizontal();DockPanel.SetDock(tools,Dock.Right);foreach(var b in buttons)tools.Children.Add(b);row.Children.Add(tools);
         var label=Text(title,13,true);row.Children.Add(label);return row;
     }
-    private static FrameworkElement Cat()
-    {
-        var canvas=new Canvas{Width=65,Height=46,IsHitTestVisible=false};
-        var outline=new System.Windows.Shapes.Path{Stroke=Ink,StrokeThickness=1.4,StrokeLineJoin=PenLineJoin.Round,StrokeStartLineCap=PenLineCap.Round,StrokeEndLineCap=PenLineCap.Round,
-            Data=Geometry.Parse("M 12,24 L 12,8 L 23,16 L 37,16 L 48,8 L 48,30 Q 48,39 30,39 Q 12,39 12,30 Z M 24,39 Q 13,44 28,44 L 49,44 Q 62,44 60,33 M 27,29 L 30,31 L 33,29 M 10,26 L 3,24 M 10,30 L 3,31 M 50,26 L 56,24 M 50,30 L 57,31")};
-        canvas.Children.Add(outline);
-        foreach(double x in new[]{22d,36d}){var eye=new Ellipse{Width=2.8,Height=2.8,Fill=Ink};Canvas.SetLeft(eye,x);Canvas.SetTop(eye,23);canvas.Children.Add(eye);}
-        return canvas;
-    }
+    private static FrameworkElement Cat()=>AssetIcon("cat",60);
     private void AddGroupLabels(Panel panel,string groupId)
     {
         var group=data.Groups.Find(x=>x.Id==groupId);
@@ -82,7 +103,7 @@ internal sealed partial class DeskWindow
         var header=new StackPanel();
         var brand=new DockPanel{Margin=new Thickness(0,0,0,12)};
         var buttons=Horizontal();DockPanel.SetDock(buttons,Dock.Right);
-        Add(buttons,WidgetButton("⚙","設定・管理",Menu),WidgetButton("⌖","最前面切替",ToggleTop),WidgetButton("▫","ミニ表示切替",ToggleMini),
+        Add(buttons,WidgetButton(AssetIcon("settings",17),"設定・管理",Menu),WidgetButton("⌖","最前面切替",ToggleTop),WidgetButton("▫","ミニ表示切替",ToggleMini),
             WidgetButton("−","最小化",()=>WindowState=WindowState.Minimized),WidgetButton("×","閉じる",Close));
         brand.Children.Add(buttons);
         var logo=Text("KOMU DESK",12,true);logo.Cursor=System.Windows.Input.Cursors.SizeAll;logo.ToolTip="ドラッグして移動";
@@ -105,8 +126,8 @@ internal sealed partial class DeskWindow
         header.Children.Add(new Border{BorderBrush=Line,BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(8),Background=White,Padding=new Thickness(11,8,11,8),Margin=new Thickness(0,8,0,4),Child=nextStack});
         DockPanel.SetDock(header,Dock.Top);root.Children.Add(header);
         var footer=new DockPanel{Margin=new Thickness(0,8,0,0)};
-        var links=Horizontal();DockPanel.SetDock(links,Dock.Right);Add(links,WidgetButton("集計","授業数集計",Counts),WidgetButton("帳票","授業日一覧・帳票",Reports));footer.Children.Add(links);
-        updateBadge=WidgetButton("更新あり","アプリのアップデート",Updates);updateBadge.Visibility=Visibility.Collapsed;footer.Children.Add(updateBadge);
+        var links=Horizontal();DockPanel.SetDock(links,Dock.Right);Add(links,WidgetButton(IconText("lesson-count","集計",14),"授業数集計",Counts),WidgetButton(IconText("printer","帳票",14),"授業日一覧・帳票",Reports));footer.Children.Add(links);
+        updateBadge=WidgetButton(IconText("update","更新あり",14),"アプリのアップデート",Updates);updateBadge.Visibility=Visibility.Collapsed;footer.Children.Add(updateBadge);
         DockPanel.SetDock(updateBadge,Dock.Left);
         footerStatus.FontSize=10;footerStatus.Foreground=Muted;footerStatus.VerticalAlignment=VerticalAlignment.Center;footerStatus.TextWrapping=TextWrapping.Wrap;footer.Children.Add(footerStatus);
         DockPanel.SetDock(footer,Dock.Bottom);root.Children.Add(footer);
@@ -167,7 +188,7 @@ internal sealed partial class DeskWindow
             body.Children.Add(new Border{Background=ReferenceEquals(l,highlight)&&l!=null?Soft:Brushes.Transparent,CornerRadius=new CornerRadius(5),Padding=new Thickness(5,1,5,1),Child=row});
         }
         body.Children.Add(Hairline());
-        body.Children.Add(Heading("CALENDAR",WidgetButton("＋","ローカル予定を編集",Events),WidgetButton("同期","Googleカレンダー設定",GoogleSettings)));
+        body.Children.Add(Heading("CALENDAR",WidgetButton("＋","ローカル予定を編集",Events),WidgetButton(AssetIcon("update",16),"Googleカレンダー設定",GoogleSettings)));
         var events=data.Events.Where(e=>e.Date==SchoolData.Iso(day)).Select(e=>(Time:e.Time==""?"終日":e.Time,Title:e.Title,Source:"")).ToList();
         var snapshot=googleState?.Snapshot;
         if(snapshot!=null&&string.CompareOrdinal(SchoolData.Iso(day),snapshot.From)>=0&&string.CompareOrdinal(SchoolData.Iso(day),snapshot.To)<=0)

@@ -30,8 +30,8 @@ internal sealed partial class DeskWindow : Window
     { Text=value, FontSize=size, FontWeight=strong?FontWeights.SemiBold:FontWeights.Normal, Foreground=color??Ink, TextWrapping=TextWrapping.Wrap, VerticalAlignment=VerticalAlignment.Center };
     private static Button Btn(string label, Action action)
     {
-        var b=new Button { Content=label, Margin=new Thickness(2), Padding=new Thickness(8,4,8,4), MinHeight=28 };
-        b.Click += (_,_) => action(); return b;
+        var b=WidgetButton(label,label,action); b.Margin=new Thickness(2); b.Padding=new Thickness(10,5,10,5); b.MinHeight=30;
+        return b;
     }
     private static StackPanel Horizontal() => new() { Orientation=Orientation.Horizontal };
     private static void Add(Panel p, params UIElement[] items) { foreach(var x in items) p.Children.Add(x); }
@@ -87,13 +87,10 @@ internal sealed partial class DeskWindow : Window
     private void Render()=>RenderWidget();
     private void Menu()
     {
-        var w=Dialog("設定・管理",420,560); var p=new StackPanel { Margin=new Thickness(14) };
-        void Item(string name,Action action)=>p.Children.Add(Btn(name,()=>{w.Close();action();}));
-        Item("1  学年・色",Grades); Item("2  クラス・色",Classes); Item("3  科目",Subjects); Item("4  担当授業",Groups);
-        Item("5  時程",Bells); Item("6  時間割の版・有効期間",Versions); Item("7  週間時間割",Weekly);
-        Item("年度・考査計上・表示",Year); Item("日別変更・個別変更",DayChanges);
-        Item(HasUpdateNotice?"アプリのアップデート（新版あり）":"アプリのアップデート",Updates); Item("Googleカレンダー（任意）",GoogleSettings); Item("既存Excelから初期取り込み",ImportExcel); Item("予定",Events); Item("タスク",Tasks); Item("授業数集計",Counts); Item("授業日一覧・帳票",Reports); Item("バックアップ（別ファイル）",Backup); Item("バックアップから復元",Restore);
-        w.Content=new ScrollViewer { Content=p, VerticalScrollBarVisibility=ScrollBarVisibility.Auto }; w.ShowDialog();
+        var w=Dialog("設定・管理",600,780);w.MinWidth=460;
+        w.Height=Math.Min(780,SystemParameters.WorkArea.Height-40);
+        w.Content=BuildSettingsContent(action=>{w.Close();action();},w.Close);
+        w.ShowDialog();
     }
     private Window Dialog(string title,double width=760,double height=500)=>new()
     { Title=title, Owner=this, WindowStartupLocation=WindowStartupLocation.CenterOwner, Width=width, Height=height, MinWidth=320, MinHeight=240, FontFamily=FontFamily, Background=Paper, Foreground=Ink };

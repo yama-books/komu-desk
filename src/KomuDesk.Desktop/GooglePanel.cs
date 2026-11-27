@@ -73,24 +73,51 @@ internal sealed partial class DeskWindow
         }
         Button ActionButton(string title,Func<Task> work)
         {
-            var b=new Button{Content=title,Margin=new Thickness(2),Padding=new Thickness(8,5,8,5),MinHeight=30};
+            var b=WidgetButton(title,title,()=>{});b.Margin=new Thickness(2);b.Padding=new Thickness(10,6,10,6);b.MinHeight=34;
             b.Click+=async (_,_)=>await work();buttons.Add(b);return b;
         }
-        var login=ActionButton("OAuth設定ファイルを選んで連携",async ()=>
+        var configStatus=Text("",12,false,Muted);
+        var detailsPanel=new StackPanel{Margin=new Thickness(0,6,0,0)};
+        var details=new Expander{Header="開発者・管理者用の認証設定",Content=detailsPanel,Margin=new Thickness(0,8,0,8)};
+        void ConfigDisplay()
         {
-            var file=new OpenFileDialog{Filter="Google OAuth Desktop JSON (*.json)|*.json",CheckFileExists=true};
-            if(file.ShowDialog(w)!=true)return;
-            if(MessageBox.Show(w,"Googleの認証画面をシステムブラウザで開きます。許可するのはカレンダーと予定の読み取りだけです。既存の連携は成功後に置き換えます。学校の許可を確認して進めてください。","外部通信の確認",MessageBoxButton.YesNo)!=MessageBoxResult.Yes)return;
+            try{configStatus.Text=GoogleClientConfig.Resolve(googleState?.Session)==null?"共有用OAuth設定がまだありません。管理者が一度準備してください。":"OAuth設定済み · ブラウザ認証可能";}
+            catch{configStatus.Text="認証設定を読み込めません。詳細設定から再登録してください。";}
+        }
+        var login=ActionButton("Googleカレンダーと連携する",async ()=>
+        {
+            DesktopCredential? credential;
+            try{credential=GoogleClientConfig.Resolve(googleState?.Session);}
+            catch{status.Text="認証設定を読み込めません。詳細設定から再登録してください。";details.IsExpanded=true;return;}
+            if(credential==null){status.Text="共有用OAuthクライアントが未設定です。管理者に確認してください。";details.IsExpanded=true;return;}
+            if(MessageBox.Show(w,"既定のブラウザでGoogle公式認証ページを開きます。予定の読み取りのみ許可します。既存の連携は成功後に置き換えます。学校の許可を確認して進めてください。","Googleカレンダー連携",MessageBoxButton.YesNo)!=MessageBoxResult.Yes)return;
             await Run(async ct=>
             {
-                var credential=DesktopCredential.Read(file.FileName);
+                GoogleClientConfig.Save(credential);
+                status.Text="ブラウザでアカウントを選択し、アクセスを許可してください。";
                 using var client=new GoogleCalendarClient();
                 var session=await client.LoginAsync(credential,url=>Process.Start(new ProcessStartInfo(url){UseShellExecute=true}),ct);
                 var nextState=new GoogleState(session,null);
                 googleVault.Save(nextState);googleState=nextState;
                 googleStatus="認証完了。カレンダーを選択して同期してください。";
             });
+            ConfigDisplay();
         });
+        var configure=ActionButton("管理者のOAuth設定ファイルを読み込む",async ()=>
+        {
+            var file=new OpenFileDialog{Filter="Google OAuth Desktop JSON (*.json)|*.json",CheckFileExists=true};
+            if(file.ShowDialog(w)!=true)return;
+            try
+            {
+                if(MessageBox.Show(w,"このPCにOAuthクライアント設定を登録します。既存の予定・認証セッションは成功した再認証まで維持します。","認証設定",MessageBoxButton.YesNo)!=MessageBoxResult.Yes)return;
+                GoogleClientConfig.Save(DesktopCredential.Read(file.FileName));
+                status.Text="設定を登録しました。Googleカレンダーと連携する、を押してください。";
+                ConfigDisplay();details.IsExpanded=false;
+            }
+            catch{status.Text="デスクトップアプリ用OAuth設定を読み込めませんでした。";}
+            await Task.CompletedTask;
+        });
+        Add(detailsPanel,Text("通常は操作不要です。開発者が用意したデスクトップ用JSONを一度登録する場合のみ使用します。ファイルを公開しないでください。",12,false,Muted),configure);
         var reload=ActionButton("カレンダー一覧を更新",async ()=>
         {
             if(googleState==null){status.Text="先に連携してください。";return;}
@@ -118,8 +145,8 @@ internal sealed partial class DeskWindow
         });
         var stop=Btn("処理を中止",()=>operation?.Cancel());
         Add(p,Text("Google Calendar",20,true),Text("外部通信は下の認証・一覧取得・同期ボタンを押した時のみ。Google側への予定の書き込み、Tasks、校務データの送信はありません。",13,false,Muted),
-            Text($"同期対象期間：{data.YearFrom} ～ {data.YearTo}",13),login,reload,Rule(),Text("表示するカレンダー",14,true),choices,sync,disconnect,stop,Rule(),status,Btn("閉じる",w.Close));
+            Text($"同期対象期間：{data.YearFrom} ～ {data.YearTo}",13),configStatus,login,details,reload,Rule(),Text("表示するカレンダー",14,true),choices,sync,disconnect,stop,Rule(),status,Btn("閉じる",w.Close));
         w.Closing+=(_,e)=>{if(operation!=null){operation.Cancel();e.Cancel=true;status.Text="中止処理中…";}};
-        Build();w.Content=new ScrollViewer{Content=p,VerticalScrollBarVisibility=ScrollBarVisibility.Auto};w.ShowDialog();
+        Build();ConfigDisplay();w.Content=new ScrollViewer{Content=p,VerticalScrollBarVisibility=ScrollBarVisibility.Auto};w.ShowDialog();
     }
 }
