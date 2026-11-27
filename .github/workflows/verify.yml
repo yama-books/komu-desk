@@ -48,6 +48,12 @@ jobs:
           $p = Start-Process -FilePath (Resolve-Path publish/KOMU-DESK.exe) -ArgumentList @("--smoke", "tray-preview.png", "--tray-preview") -PassThru
           if (!$p.WaitForExit(30000)) { $p.Kill(); throw "Tray smoke timed out" }
           if ($p.ExitCode -ne 0 -or !(Test-Path tray-preview.png)) { throw "Tray smoke failed" }
+      - name: Exercise retention on isolated fictional package directories
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath (Resolve-Path publish/KOMU-DESK.exe) -ArgumentList @("--smoke", "retention-preview.png", "--retention-test") -PassThru
+          if (!$p.WaitForExit(30000)) { $p.Kill(); throw "Retention test timed out" }
+          if ($p.ExitCode -ne 0 -or !(Test-Path retention-preview.png)) { throw "Retention test failed" }
       - uses: actions/upload-artifact@v4
         with:
           name: komu-desk-tray-picker-image
