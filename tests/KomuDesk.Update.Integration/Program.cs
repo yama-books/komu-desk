@@ -17,7 +17,7 @@ try
     using var ct=new CancellationTokenSource(TimeSpan.FromMinutes(8));
     using var client=new UpdateClient();
     var offer=await client.Check(UpdateInstall.Current,ct.Token)??throw new Exception("No update found");
-    if(offer.Version!=new Version(0,1,2))throw new Exception("Unexpected release "+offer.Tag);
+    if(offer.Version!=new Version(0,1,3))throw new Exception("Unexpected release "+offer.Tag);
     Console.WriteLine("PASS real public release discovery");
     var staged=await client.Stage(offer,ct.Token,new Progress<long>());
     if(!UpdateInstall.IsManaged(staged,out var version)||version!=offer.Version)throw new Exception("Staging invalid");
