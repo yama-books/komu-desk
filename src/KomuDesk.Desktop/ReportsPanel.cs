@@ -12,11 +12,15 @@ internal sealed partial class DeskWindow
     private void Reports()
     {
         var w=Dialog("授業日一覧・帳票",930,580);
-        var p=new DockPanel{Margin=new Thickness(14)};
+        w.Content=BuildReportsContent(w);w.ShowDialog();
+    }
+    private FrameworkElement BuildReportsContent(Window w)
+    {
+        var p=new DockPanel{Margin=new Thickness(8)};
         var top=new StackPanel();DockPanel.SetDock(top,Dock.Top);
-        var bar=Horizontal();var start=new DatePicker{SelectedDate=SchoolData.ParseDate(data.YearFrom)};var end=new DatePicker{SelectedDate=SchoolData.ParseDate(data.YearTo)};
+        var bar=new WrapPanel();var start=new DatePicker{SelectedDate=SchoolData.ParseDate(data.YearFrom)};var end=new DatePicker{SelectedDate=SchoolData.ParseDate(data.YearTo)};
         var groups=new ComboBox{ItemsSource=new[]{new Choice("","すべて")}.Concat(GroupChoices()).ToArray(),SelectedValuePath="Id",DisplayMemberPath="Label",SelectedIndex=0,MinWidth=160};
-        var grid=new DataGrid{AutoGenerateColumns=false,IsReadOnly=true,CanUserAddRows=false,RowHeaderWidth=0};
+        var grid=Table();grid.IsReadOnly=true;
         foreach(var (label,key) in new[]{("日付","Date"),("時限","Period"),("授業","Group"),("種別","Kind"),("状態","State"),("回次","Number"),("メモ・理由","Note")})grid.Columns.Add(Col(label,key));
         string? Group()=>groups.SelectedValue is string id&&id!=""?id:null;
         (DateTime,DateTime) Range()=>(start.SelectedDate??throw new InvalidOperationException("開始日を選択してください。"),end.SelectedDate??throw new InvalidOperationException("終了日を選択してください。"));
@@ -55,8 +59,8 @@ internal sealed partial class DeskWindow
                 dlg.PrintDocument(((IDocumentPaginatorSource)doc).DocumentPaginator,"KOMU DESK 授業帳票");
             }catch(Exception ex){Error(ex);}
         }
-        Add(bar,start,Text(" ～ "),end,groups,Btn("表示",Refresh));Add(top,bar,Text("回次は選択期間内。考査計上設定に従います。印刷は選択したWindowsプリンターを使用します。",12,false,Muted));
-        var footer=Horizontal();DockPanel.SetDock(footer,Dock.Bottom);Add(footer,Btn("Excel出力",Export),Btn("印刷・PDFプリンター",Print),Btn("閉じる",w.Close));Add(p,top,footer,grid);w.Content=p;Refresh();w.ShowDialog();
+        Add(bar,start,Text(" ～ "),end,groups,Btn("表示",Refresh));Add(top,Text("授業日一覧・帳票",22,true),bar,Text("回次は選択期間内。考査計上設定に従います。印刷は選択したWindowsプリンターを使用します。",12,false,Muted));
+        var footer=new WrapPanel();DockPanel.SetDock(footer,Dock.Bottom);Add(footer,Tool("spreadsheet","Excel出力",Export),Tool("printer","印刷・PDFプリンター",Print));Add(p,top,footer,grid);Refresh();return p;
     }
     private void Restore()
     {

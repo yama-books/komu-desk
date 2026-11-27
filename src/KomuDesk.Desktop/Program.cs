@@ -50,6 +50,7 @@ internal static class Program
         try
         {
             var app = new Application { ShutdownMode = ShutdownMode.OnMainWindowClose };
+            DeskWindow.InstallFormStyles(app);
             bool demo = smoke || args.Contains("--demo");
             var location = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KOMU DESK", "data.json");
             var store = new LocalStore(location);
@@ -59,7 +60,9 @@ internal static class Program
             if(smoke&&args.Contains("--tray-preview")){window.CheckTrayResources();window.Width=530;window.Height=780;window.Content=window.BuildTraySettings(()=>{});}
             if(smoke&&args.Contains("--retention-test"))CheckRetention();
             var pageArg=args.FirstOrDefault(a=>a.StartsWith("--page=",StringComparison.Ordinal));
-            if(smoke&&pageArg!=null){window.Width=1040;window.Height=720;window.CheckUiGlyphs();var mode=args.FirstOrDefault(a=>a.StartsWith("--mode=",StringComparison.Ordinal));if(mode!=null)window.SetAgendaModeForSmoke(mode[7..]);window.Content=window.BuildManagementContent(pageArg[7..]);}
+            if(smoke&&pageArg!=null){window.Width=args.Contains("--narrow")?720:1040;window.Height=args.Contains("--narrow")?520:720;window.CheckUiGlyphs();var mode=args.FirstOrDefault(a=>a.StartsWith("--mode=",StringComparison.Ordinal));if(mode!=null)window.SetAgendaModeForSmoke(mode[7..]);window.Content=window.BuildManagementContent(pageArg[7..]);}
+            if(smoke&&args.Contains("--event-form")){window.Width=470;window.Height=450;window.Content=window.BuildFormForSmoke(false);}
+            if(smoke&&args.Contains("--task-form")){window.Width=470;window.Height=420;window.Content=window.BuildFormForSmoke(true);}
             if(smoke)
             {
                 app.DispatcherUnhandledException+=(_,e)=>{e.Handled=true;app.Shutdown(1);};
@@ -69,11 +72,12 @@ internal static class Program
                     {
                         window.UpdateLayout();
                         if(args.Contains("--ui3-interaction"))window.CheckUi3Interactions();
+                        if(args.Contains("--form-interaction"))window.CheckFormInteractions();
                         if(!window.IsLoaded||window.ActualWidth<200||window.ActualHeight<150)throw new InvalidOperationException();
                         int i=Array.IndexOf(args,"--smoke");
                         if(i+1<args.Length)
                         {
-                            var content=(FrameworkElement)window.Content;
+                            var content=(FrameworkElement)window;
                             int width=(int)Math.Ceiling(content.ActualWidth),height=(int)Math.Ceiling(content.ActualHeight);
                             if(width<1||height<1)throw new InvalidOperationException();
                             var bitmap=new RenderTargetBitmap(width,height,96,96,PixelFormats.Pbgra32);bitmap.Render(content);

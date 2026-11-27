@@ -104,14 +104,15 @@ internal sealed partial class DeskWindow : Window
     { Header=title, ItemsSource=values, SelectedValuePath=value, DisplayMemberPath=display, SelectedValueBinding=new Binding(property), Width=new DataGridLength(1,DataGridLengthUnitType.Star) };
     private void Edit<T>(string title, string hint, Func<SchoolData,List<T>> get, Action<SchoolData,List<T>> set, params DataGridColumn[] columns) where T:class,new()
     {
-        var d=data.Clone(); var rows=new ObservableCollection<T>(get(d)); var w=Dialog(title);
+        var d=data.Clone(); var rows=new ObservableCollection<T>(get(d)); var w=Dialog(title);var initial=System.Text.Json.JsonSerializer.Serialize(rows);
         var p=new DockPanel { Margin=new Thickness(14) };
         var tip=Text(hint,13,false,Muted); tip.Margin=new Thickness(0,0,0,8); DockPanel.SetDock(tip,Dock.Top); p.Children.Add(tip);
         var grid=Table();grid.ItemsSource=rows;grid.CanUserDeleteRows=false;grid.SelectionMode=DataGridSelectionMode.Extended;grid.Margin=new Thickness(0,0,0,8);
         foreach(var c in columns) grid.Columns.Add(c);
-        var bar=Horizontal(); DockPanel.SetDock(bar,Dock.Bottom);
+        var finish=ProtectDraft(w,()=>{grid.CommitEdit(DataGridEditingUnit.Cell,true);grid.CommitEdit(DataGridEditingUnit.Row,true);return initial!=System.Text.Json.JsonSerializer.Serialize(rows);});
+        var bar=new WrapPanel(); DockPanel.SetDock(bar,Dock.Bottom);
         Add(bar,Btn("追加",()=>{rows.Add(new T());grid.ScrollIntoView(rows.Last());}),Btn("削除",()=>{ if(grid.SelectedItems.Count==0||MessageBox.Show(w,"選択行を削除しますか？（保存で確定）","確認",MessageBoxButton.YesNo)!=MessageBoxResult.Yes)return;foreach(var row in grid.SelectedItems.Cast<T>().ToList()) rows.Remove(row); }),
-            Btn("保存",()=>{ if(!grid.CommitEdit(DataGridEditingUnit.Cell,true)||!grid.CommitEdit(DataGridEditingUnit.Row,true)) return; set(d,rows.ToList()); if(Commit(d)) w.Close(); }),Btn("取消",w.Close));
+            Btn("保存",()=>{ if(!grid.CommitEdit(DataGridEditingUnit.Cell,true)||!grid.CommitEdit(DataGridEditingUnit.Row,true)) return; set(d,rows.ToList()); if(Commit(d)) finish(); }),Btn("取消",w.Close));
         p.Children.Add(bar);p.Children.Add(grid);w.Content=p;w.ShowDialog();
     }
     private record Choice(string Id,string Label);
@@ -182,12 +183,12 @@ internal sealed partial class DeskWindow : Window
     private void Year()
     {
         var w=Dialog("年度・表示設定",400,330);var p=new StackPanel{Margin=new Thickness(14)};
-        var from=new TextBox{Text=data.YearFrom};var to=new TextBox{Text=data.YearTo};
+        var from=new DatePicker{SelectedDate=SchoolData.ParseDate(data.YearFrom)};var to=new DatePicker{SelectedDate=SchoolData.ParseDate(data.YearTo)};
         var exam=new CheckBox{Content="考査を授業数に含める",IsChecked=data.CountExams,Margin=new Thickness(0,10,0,0)};
         var free=new CheckBox{Content="空き時間を表示",IsChecked=data.Display.ShowFree};
         Add(p,Text("年度開始 (yyyy-MM-dd)"),from,Text("年度終了"),to,exam,free,Text("時間割の有効期間も年度内に設定してください。",12,false,Muted),
-            Btn("保存",()=>{var d=data.Clone();d.YearFrom=from.Text;d.YearTo=to.Text;d.CountExams=exam.IsChecked==true;d.Display.ShowFree=free.IsChecked==true;if(Commit(d))w.Close();}));
-        w.Content=p;w.ShowDialog();
+            Btn("保存",()=>{var d=data.Clone();if(from.SelectedDate is not DateTime a||to.SelectedDate is not DateTime z)return;d.YearFrom=SchoolData.Iso(a);d.YearTo=SchoolData.Iso(z);d.CountExams=exam.IsChecked==true;d.Display.ShowFree=free.IsChecked==true;if(Commit(d))w.Close();}));
+        w.Content=PageScroll(p);w.ShowDialog();
     }
     private void LessonDetail(Lesson l)
     {
