@@ -106,6 +106,8 @@ internal sealed partial class DeskWindow
         DockPanel.SetDock(header,Dock.Top);root.Children.Add(header);
         var footer=new DockPanel{Margin=new Thickness(0,8,0,0)};
         var links=Horizontal();DockPanel.SetDock(links,Dock.Right);Add(links,WidgetButton("集計","授業数集計",Counts),WidgetButton("帳票","授業日一覧・帳票",Reports));footer.Children.Add(links);
+        updateBadge=WidgetButton("更新あり","アプリのアップデート",Updates);updateBadge.Visibility=Visibility.Collapsed;footer.Children.Add(updateBadge);
+        DockPanel.SetDock(updateBadge,Dock.Left);
         footerStatus.FontSize=10;footerStatus.Foreground=Muted;footerStatus.VerticalAlignment=VerticalAlignment.Center;footerStatus.TextWrapping=TextWrapping.Wrap;footer.Children.Add(footerStatus);
         DockPanel.SetDock(footer,Dock.Bottom);root.Children.Add(footer);
         root.Children.Add(new ScrollViewer{Content=body,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled});
@@ -132,6 +134,7 @@ internal sealed partial class DeskWindow
     {
         body.Children.Clear();body.Visibility=data.Display.Mini?Visibility.Collapsed:Visibility.Visible;
         footerStatus.Text=demo?"架空デモ · 保存なし":googleState==null?"ローカル保存":"ローカル保存 · Google";
+        RefreshUpdateNotice();
         UpdateWidgetClock(DateTime.Now);
         if(data.Display.Mini)return;
         var dateRow=new DockPanel{Margin=new Thickness(0,5,0,8)};
