@@ -55,8 +55,10 @@ internal sealed partial class DeskWindow
         Click("保存");if(saved||data.Events.Count!=before)throw new Exception("empty event validation");
         Find<TextBox>("予定名").Text="検査用架空予定";Click("保存");
         if(!saved||data.Events.Count!=before+1||data.Events.Last().Time!="")throw new Exception("event save");
+        before=data.Events.Count;saved=false;Content=EventEditor(DateTime.Today,null,()=>saved=true);UpdateLayout();Find<TextBox>("予定名").Text="架空時刻検査";Click("明日");Click("15:30");Click("保存");if(!saved||data.Events.Count!=before+1||data.Events.Last().Date!=SchoolData.Iso(DateTime.Today.AddDays(1))||data.Events.Last().Time!="15:30")throw new Exception("event shortcut save");
         before=data.Tasks.Count;saved=false;Content=TaskEditor(null,null,()=>saved=true);UpdateLayout();Find<TextBox>("タスク名").Text="検査用架空タスク";Click("保存");
         if(!saved||data.Tasks.Count!=before+1||data.Tasks.Last().Due!="")throw new Exception("task save");
+        before=data.Tasks.Count;saved=false;Content=TaskEditor(null,null,()=>saved=true);UpdateLayout();Find<TextBox>("タスク名").Text="架空期限検査";Click("1週間後");Click("保存");if(!saved||data.Tasks.Count!=before+1||data.Tasks.Last().Due!=SchoolData.Iso(DateTime.Today.AddDays(7)))throw new Exception("task shortcut save");
         agendaFrom=DateTime.Today;agendaTo=DateTime.Today;agendaMode="一覧";Content=BuildManagementContent("calendar");UpdateLayout();
         var query=Find<TextBox>("予定検索");query.Text="検査用架空予定";UpdateLayout();
         var table=Walk(this).OfType<DataGrid>().First();if(table.Items.Count!=1)throw new Exception("agenda search");
