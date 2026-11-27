@@ -33,7 +33,7 @@ internal sealed partial class DeskWindow
     private static FrameworkElement Glyph(string id,double size=18)
     {
         if(!GlyphPaths.TryGetValue(id,out var path))return AssetIcon(id,size);
-        var shape=new Path{Data=Geometry.Parse(path),Stroke=Ink,StrokeThickness=1.8,StrokeStartLineCap=PenLineCap.Round,StrokeEndLineCap=PenLineCap.Round,StrokeLineJoin=PenLineJoin.Round};
+        var shape=new System.Windows.Shapes.Path{Data=Geometry.Parse(path),Stroke=Ink,StrokeThickness=1.8,StrokeStartLineCap=PenLineCap.Round,StrokeEndLineCap=PenLineCap.Round,StrokeLineJoin=PenLineJoin.Round};
         var canvas=new Canvas{Width=24,Height=24};canvas.Children.Add(shape);
         return new Viewbox{Width=size,Height=size,Child=canvas,IsHitTestVisible=false};
     }
