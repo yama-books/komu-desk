@@ -59,7 +59,7 @@ internal static class Program
             if(smoke&&args.Contains("--tray-preview")){window.CheckTrayResources();window.Width=530;window.Height=780;window.Content=window.BuildTraySettings(()=>{});}
             if(smoke&&args.Contains("--retention-test"))CheckRetention();
             var pageArg=args.FirstOrDefault(a=>a.StartsWith("--page=",StringComparison.Ordinal));
-            if(smoke&&pageArg!=null){window.Width=1040;window.Height=720;window.Content=window.BuildManagementContent(pageArg[7..]);}
+            if(smoke&&pageArg!=null){window.Width=1040;window.Height=720;window.CheckUiGlyphs();var mode=args.FirstOrDefault(a=>a.StartsWith("--mode=",StringComparison.Ordinal));if(mode!=null)window.SetAgendaModeForSmoke(mode[7..]);window.Content=window.BuildManagementContent(pageArg[7..]);}
             if(smoke)
             {
                 app.DispatcherUnhandledException+=(_,e)=>{e.Handled=true;app.Shutdown(1);};
