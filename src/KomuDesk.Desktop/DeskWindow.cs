@@ -87,15 +87,15 @@ internal sealed partial class DeskWindow : Window
         if(renderedMinute!=minute){renderedMinute=minute;Render();}
     }
     private void Render()=>RenderWidget();
-    private void Menu()
+    private void Menu()=>OpenManagement();
+    private Window Dialog(string title,double width=760,double height=500)
     {
-        var w=Dialog("設定・管理",600,780);w.MinWidth=460;
-        w.Height=Math.Min(780,SystemParameters.WorkArea.Height-40);
-        w.Content=BuildSettingsContent(action=>{w.Close();action();},w.Close);
-        w.ShowDialog();
+        var work=SystemParameters.WorkArea;
+        var w=new Window{Title=title,Owner=management??this,WindowStartupLocation=WindowStartupLocation.CenterOwner,
+            Width=Math.Min(width,work.Width),Height=Math.Min(height,work.Height),MinWidth=Math.Min(320,work.Width),MinHeight=Math.Min(240,work.Height),
+            FontFamily=FontFamily,Background=Paper,Foreground=Ink,Icon=Icon};
+        ApplyDeskChrome(w);return w;
     }
-    private Window Dialog(string title,double width=760,double height=500)=>new()
-    { Title=title, Owner=this, WindowStartupLocation=WindowStartupLocation.CenterOwner, Width=width, Height=height, MinWidth=320, MinHeight=240, FontFamily=FontFamily, Background=Paper, Foreground=Ink };
     private static DataGridTextColumn Col(string title,string property)=>new()
     { Header=title, Binding=new Binding(property){UpdateSourceTrigger=UpdateSourceTrigger.LostFocus}, Width=new DataGridLength(1,DataGridLengthUnitType.Star) };
     private static DataGridCheckBoxColumn CheckCol(string title,string property)=>new(){Header=title,Binding=new Binding(property),Width=100};
