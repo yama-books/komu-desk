@@ -55,42 +55,49 @@ internal sealed class UpdateClient : IDisposable
             await using var output=new FileStream(path,FileMode.CreateNew,FileAccess.Write,FileShare.None);
             byte[] buffer=new byte[65536];long total=0,lastReported=0;int n;
             while((n=await input.ReadAsync(buffer,ct))!=0)
-            {total+=n;if(total>max)throw new InvalidDataException("更新サイズの上限を超えています。");await output.WriteAsync(buffer.AsMemory(0,n),ct);if(total-lastReported>=Math.Max(65536,max/100)||total==max){progress?.Report(total);lastReported=total;}}
+            {total+=n;if(total>max)throw new InvalidDataException("更新サイズの上限を超えています。");await output.WriteAsync(buffer.AsMemory(0,n),ct);if(total-lastReported>=Math.Max(65536,max/100)||total==max){progress?.Report(total);lastReported=total;}if(total==max&&response.Content.Headers.ContentLength==max)break;}
             return;
         }
         throw new InvalidDataException("更新先の転送回数が多すぎます。");
     }
-    public async Task<string> Stage(UpdateOffer offer,CancellationToken ct,IProgress<long> progress)
+    public async Task<string> Stage(UpdateOffer offer,CancellationToken ct,IProgress<long> progress,IProgress<string>? phase=null)
     {
         var root=UpdateInstall.Root;Directory.CreateDirectory(root);
         var work=Path.Combine(root,"download-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(work);
         try
         {
             var sha=Path.Combine(work,"SHA256SUMS.txt");var zip=Path.Combine(work,"package.zip");
+            phase?.Report("チェックサム取得中");
             await Download(offer.Tag,"SHA256SUMS.txt",sha,4096,ct);
             var expected=UpdatePackage.ParseChecksum(await File.ReadAllTextAsync(sha,ct));
             if(!offer.Digest.Equals("sha256:"+expected,StringComparison.OrdinalIgnoreCase))throw new InvalidDataException("GitHubのハッシュと配布チェックサムが一致しません。");
+            phase?.Report("ダウンロード中");
             await Download(offer.Tag,UpdatePackage.AssetName,zip,offer.Size,ct,progress);
             if(new FileInfo(zip).Length!=offer.Size)throw new InvalidDataException("更新ファイルのサイズが一致しません。");
-            await Task.Run(()=>{UpdatePackage.Verify(zip,expected);UpdatePackage.Extract(zip,Path.Combine(work,"app"));},ct);
+            phase?.Report("ファイルの整合性を確認中");
+            await Task.Run(()=>UpdatePackage.Verify(zip,expected),ct);
+            phase?.Report("新版を展開中");
+            await Task.Run(()=>UpdatePackage.Extract(zip,Path.Combine(work,"app"),ct),ct);
             var exe=Path.Combine(work,"app","KOMU-DESK.exe");
             var info=System.Reflection.AssemblyName.GetAssemblyName(Path.Combine(work,"app","KOMU-DESK.dll")).Version;
             if(info==null||info.Major!=offer.Version.Major||info.Minor!=offer.Version.Minor||info.Build!=offer.Version.Build)throw new InvalidDataException("実行ファイルの版が一致しません。");
             ct.ThrowIfCancellationRequested();
             // A verified package must also start its isolated fictional smoke mode before switching.
+            phase?.Report("新版の試験起動中（最大30秒）");
             using(var probe=System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe){UseShellExecute=false,WorkingDirectory=Path.GetDirectoryName(exe)!,ArgumentList={"--smoke"}})??throw new InvalidOperationException("更新版を試験起動できません。"))
             {
                 using var limit=CancellationTokenSource.CreateLinkedTokenSource(ct);limit.CancelAfter(TimeSpan.FromSeconds(30));
                 try{await probe.WaitForExitAsync(limit.Token);}
-                catch{if(!probe.HasExited)probe.Kill();throw;}
+                catch(OperationCanceledException){if(!probe.HasExited){try{probe.Kill();}catch(InvalidOperationException){}}ct.ThrowIfCancellationRequested();throw new TimeoutException("新版の試験起動が30秒以内に終了しませんでした。");}
                 if(probe.ExitCode!=0)throw new InvalidDataException("更新版の試験起動に失敗しました。");
             }
             ct.ThrowIfCancellationRequested();
             string dir=Path.Combine(root,offer.Tag+"-"+Guid.NewGuid().ToString("N"));
-            Directory.Move(Path.Combine(work,"app"),dir);
+            phase?.Report("更新ファイルを配置中");
+            await Task.Run(()=>Directory.Move(Path.Combine(work,"app"),dir),ct);
             return dir;
         }
-        finally{try{Directory.Delete(work,true);}catch(IOException){}catch(UnauthorizedAccessException){}}
+        finally{await Task.Run(()=>{try{Directory.Delete(work,true);}catch(IOException){}catch(UnauthorizedAccessException){}}).ConfigureAwait(false);}
     }
     public void Dispose()=>http.Dispose();
 }
