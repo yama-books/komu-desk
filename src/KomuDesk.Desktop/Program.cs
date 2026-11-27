@@ -73,6 +73,7 @@ internal static class Program
                         window.UpdateLayout();
                         if(args.Contains("--ui3-interaction"))window.CheckUi3Interactions();
                         if(args.Contains("--form-interaction"))window.CheckFormInteractions();
+                        if(args.Contains("--setup-interaction"))window.CheckSchoolSetupInteractions();
                         if(!window.IsLoaded||window.ActualWidth<200||window.ActualHeight<150)throw new InvalidOperationException();
                         int i=Array.IndexOf(args,"--smoke");
                         if(i+1<args.Length)

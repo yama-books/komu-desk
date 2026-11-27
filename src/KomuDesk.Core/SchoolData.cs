@@ -66,7 +66,7 @@ public class SchoolData
         bool Color(string s) => Regex.IsMatch(s ?? "", "^#[0-9a-fA-F]{6}$");
         bool Name(string s) => !string.IsNullOrWhiteSpace(s);
         var from = ParseDate(YearFrom); var to = ParseDate(YearTo);
-        Require(Schema == 1, "対応していない保存形式です。");
+        Require(Schema is 1 or 2, "対応していない保存形式です。");
         Require(from <= to && (to - from).TotalDays <= 730, "年度の期間を確認してください。");
         Unique(Grades.Select(x => x.Id), "学年ID"); Unique(Classes.Select(x => x.Id), "クラスID");
         Unique(Subjects.Select(x => x.Id), "科目ID"); Unique(Groups.Select(x => x.Id), "授業ID");

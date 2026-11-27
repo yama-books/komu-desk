@@ -138,4 +138,6 @@ Equal(SchoolSetup.Suggest(setup,new[]{new ScheduleInput(autoDate,"特例","local
 Equal(SchoolSetup.Apply(setup,auto,date),false,"stale suggestion actual guard");
 Equal(LessonEngine.Day(setup,autoDate,autoDate).Lessons.Single(l=>l.Period==1).State,"confirmed","actual survives special schedule");
 Equal(SchoolSetup.Suggest(setup,new[]{new ScheduleInput(date.AddDays(-1),"月曜時間割","local")},date).Single().Block!="",true,"past protected");
+var migrationPath=Path.Combine(Path.GetTempPath(),"komu-schema-"+Guid.NewGuid().ToString("N")+".json");
+try{var migrationStore=new LocalStore(migrationPath);migrationStore.Save(setup);Equal(migrationStore.Load(date).Schema,2,"special schedule schema rollback guard");Equal(migrationStore.Load(date).BellProfiles.Count,1,"profile round trip");}finally{File.Delete(migrationPath);}
 Console.WriteLine($"TOTAL {passed} PASS");

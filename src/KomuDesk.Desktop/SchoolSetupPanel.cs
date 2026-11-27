@@ -122,7 +122,7 @@ internal sealed partial class DeskWindow
         void Load(BellProfile p){item=p;name.Text=p.Name;rows.Clear();foreach(var b in p.Bells)rows.Add(new Bell{Number=b.Number,Start=b.Start,End=b.End});}
         selector.SelectionChanged+=(_,_)=>{if(selector.SelectedItem is BellProfile p)Load(p);};
         void New(){selector.SelectedIndex=-1;Load(new BellProfile{Name="",Bells=data.Bells.Select(b=>new Bell{Number=b.Number,Start=b.Start,End=b.End}).ToList()});}
-        var top=new StackPanel();Add(top,Text("特別時程テンプレート",20,true),Text("通常時程を複製し、開始・終了時刻を変更。不要な時限は削除します。",12,false,Muted),selector,Tool("add","通常時程から新規",New));Field(top,"時程名（例：短縮4限）",name);DockPanel.SetDock(top,Dock.Top);root.Children.Add(top);
+        var top=new StackPanel();Add(top,Text("特別時程テンプレート",20,true),Text("通常時程を複製し、開始・終了時刻を変更。不要な時限は削除します。実際の時刻を確認して保存してください。",12,false,Muted),selector,Tool("add","通常時程から新規",New));Field(top,"時程名（例：短縮4限）",name);DockPanel.SetDock(top,Dock.Top);root.Children.Add(top);
         var actions=new WrapPanel();Add(actions,Tool("trash","選択時限を除く",()=>{foreach(var b in grid.SelectedItems.Cast<Bell>().ToArray())rows.Remove(b);}),Primary("save","この時程を保存",()=>{if(item==null)return;if(!grid.CommitEdit(DataGridEditingUnit.Cell,true)||!grid.CommitEdit(DataGridEditingUnit.Row,true))return;var d=data.Clone();if(d.Days.Any(x=>x.ProfileId==item.Id)){MessageBox.Show(w,"使用中の時程は変更できません。新規時程として登録してください。");return;}d.BellProfiles.RemoveAll(p=>p.Id==item.Id);d.BellProfiles.Add(new BellProfile{Id=item.Id,Name=name.Text.Trim(),Bells=rows.ToList()});if(Commit(d))w.Close();}),Tool("close","取消",w.Close));
         DockPanel.SetDock(actions,Dock.Bottom);root.Children.Add(actions);root.Children.Add(grid);New();w.Content=root;w.ShowDialog();
     }
@@ -149,7 +149,7 @@ internal sealed partial class DeskWindow
         var w=Dialog("予定から時間割変更",800,620);var root=new DockPanel{Margin=new Thickness(12)};
         var top=new StackPanel();Add(top,Text("時間割変更候補",22,true),Text("既存変更・確定授業・過去・競合は自動処理しません。短縮時程は登録後に候補になります。",12,false,Muted));DockPanel.SetDock(top,Dock.Top);root.Children.Add(top);
         var list=new StackPanel();var choices=new List<(ScheduleSuggestion Suggestion,CheckBox Check)>();
-        foreach(var s in SchoolSetup.Suggest(data,ScheduleInputs(data),DateTime.Today))
+        foreach(var s in SchoolSetup.Suggest(data,ScheduleInputs(data),DateTime.Today).Where(x=>x.Date>=DateTime.Today.AddDays(-30)))
         {
             var p=new StackPanel();var check=new CheckBox{Content="適用する",IsEnabled=s.Block=="",IsChecked=false};
             Add(p,Text(DayText(s.Date)+" · "+s.Title,14,true),Text(s.Summary(data),13),Text(s.Block,12,false,Muted),check);list.Children.Add(CardBox(p));choices.Add((s,check));
@@ -157,6 +157,44 @@ internal sealed partial class DeskWindow
         if(choices.Count==0)list.Children.Add(Text("変更候補はありません。",13,false,Muted));
         var footer=new WrapPanel();Add(footer,Primary("check","選択した変更を適用",()=>{var draft=data.Clone();int n=choices.Where(x=>x.Check.IsChecked==true).Count(x=>SchoolSetup.Apply(draft,x.Suggestion,DateTime.Today));if(n==0)return;if(Commit(draft))w.Close();}),Tool("close","閉じる",w.Close));
         DockPanel.SetDock(footer,Dock.Bottom);root.Children.Add(footer);root.Children.Add(PageScroll(list));w.Content=root;w.ShowDialog();
+    }
+    internal void CheckSchoolSetupInteractions()
+    {
+        if(!demo)throw new InvalidOperationException("demo only");
+        var original=data;data=SchoolData.Empty(DateTime.Today);
+        IEnumerable<DependencyObject> Walk(DependencyObject node){yield return node;for(int i=0;i<VisualTreeHelper.GetChildrenCount(node);i++)foreach(var child in Walk(VisualTreeHelper.GetChild(node,i)))yield return child;}
+        void ModalCheck(string title,Action open,Action<Window> check)
+        {
+            Exception? failure=null;
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle,new Action(()=>{
+                var w=Application.Current.Windows.OfType<Window>().SingleOrDefault(x=>x!=this&&x.Title==title);
+                try{if(w==null)throw new Exception("dialog missing: "+title);w.UpdateLayout();check(w);}
+                catch(Exception e){failure=e;w?.Close();}
+            }));
+            open();if(failure!=null)throw failure;
+        }
+        T Find<T>(Window w,string label) where T:FrameworkElement=>Walk(w).OfType<T>().First(x=>System.Windows.Automation.AutomationProperties.GetName(x)==label);
+        void Click(Window w,string label){Find<Button>(w,label).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));w.UpdateLayout();}
+        ModalCheck("担当授業を一括登録",RegisterGroups,w=>{
+            Find<ComboBox>(w,"学年（既存または新規）").Text="架空学年";
+            Find<ComboBox>(w,"科目（既存または新規）").Text="架空科目";
+            Find<TextBox>(w,"クラス名").Text="A、B";
+            Click(w,"一括登録");
+        });
+        if(data.Groups.Count!=2)throw new Exception("group registration");
+        ModalCheck("週間時間割・かんたん入力",PaintWeekly,w=>{Click(w,"時限 1 0");Click(w,"保存");});
+        if(data.Timetables[0].Slots.Count!=1)throw new Exception("weekly painting");
+        var date=DateTime.Today.AddDays(1);
+        if(date<=SchoolData.ParseDate(data.YearTo))
+        {
+            data.Events.Add(new LocalEvent{Date=SchoolData.Iso(date),Title="月曜時間割"});
+            ModalCheck("予定から時間割変更",ScheduleReview,w=>{
+                Walk(w).OfType<CheckBox>().First(c=>Equals(c.Content,"適用する")&&c.IsEnabled).IsChecked=true;
+                Click(w,"選択した変更を適用");
+            });
+            if(data.Days.Single().Weekday!=1)throw new Exception("schedule approval");
+        }
+        data=original;Render();
     }
     private string DayScheduleLabel(DateTime d)
     {
