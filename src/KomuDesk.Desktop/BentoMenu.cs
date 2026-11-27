@@ -74,7 +74,8 @@ internal sealed partial class DeskWindow
             ("spreadsheet","Excel取込","初期データ",ImportExcel),
             ("backup","バックアップ","ローカル保存",Backup),
             ("restore","復元","バックアップ読込",Restore),
-            ("update","アップデート",HasUpdateNotice?"新版あり":"バージョン確認",Updates));
+            ("update","アップデート",HasUpdateNotice?"新版あり":"バージョン確認",Updates),
+            ("cat","アイコン","10種類から選ぶ",TraySettings));
         var footer=WidgetButton("閉じる","設定を閉じる",close);footer.Margin=new Thickness(4,12,4,4);panel.Children.Add(footer);
         return new ScrollViewer{Content=panel,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
     }
