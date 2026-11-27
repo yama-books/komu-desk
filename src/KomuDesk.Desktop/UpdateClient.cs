@@ -70,6 +70,14 @@ internal sealed class UpdateClient : IDisposable
             var info=System.Reflection.AssemblyName.GetAssemblyName(Path.Combine(work,"app","KOMU-DESK.dll")).Version;
             if(info==null||info.Major!=offer.Version.Major||info.Minor!=offer.Version.Minor||info.Build!=offer.Version.Build)throw new InvalidDataException("実行ファイルの版が一致しません。");
             ct.ThrowIfCancellationRequested();
+            // A verified package must also start its isolated fictional smoke mode before switching.
+            using(var probe=System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe){UseShellExecute=false,WorkingDirectory=Path.GetDirectoryName(exe)!,ArgumentList={"--smoke"}})??throw new InvalidOperationException("更新版を試験起動できません。"))
+            {
+                using var limit=CancellationTokenSource.CreateLinkedTokenSource(ct);limit.CancelAfter(TimeSpan.FromSeconds(30));
+                try{await probe.WaitForExitAsync(limit.Token);}
+                catch{if(!probe.HasExited)probe.Kill();throw;}
+                if(probe.ExitCode!=0)throw new InvalidDataException("更新版の試験起動に失敗しました。");
+            }
             string dir=Path.Combine(root,offer.Tag+"-"+Guid.NewGuid().ToString("N"));
             Directory.Move(Path.Combine(work,"app"),dir);
             return dir;
