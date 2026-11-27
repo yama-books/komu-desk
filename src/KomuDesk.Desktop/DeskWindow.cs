@@ -32,7 +32,8 @@ internal sealed partial class DeskWindow : Window
     { Text=value, FontSize=size, FontWeight=strong?FontWeights.SemiBold:FontWeights.Normal, Foreground=color??Ink, TextWrapping=TextWrapping.Wrap, VerticalAlignment=VerticalAlignment.Center };
     private static Button Btn(string label, Action action)
     {
-        var b=WidgetButton(label,label,action); b.Margin=new Thickness(2); b.Padding=new Thickness(10,5,10,5); b.MinHeight=30;
+        string? icon=label.StartsWith("追加")?"add":label.StartsWith("削除")?"trash":label.Contains("保存")?"save":label=="取消"||label=="閉じる"?"close":label.StartsWith("編集")?"edit":label.Contains("確定")?"check":label.Contains("集計")?"lesson-count":null;
+        var b=WidgetButton(icon==null?(object)label:GlyphText(icon,label),label,action); b.Margin=new Thickness(2); b.Padding=new Thickness(10,5,10,5); b.MinHeight=30;
         return b;
     }
     private static StackPanel Horizontal() => new() { Orientation=Orientation.Horizontal };
@@ -84,18 +85,18 @@ internal sealed partial class DeskWindow : Window
         var now=DateTime.Now;
         if(lastToday!=now.Date){if(day.Date==lastToday)day=now.Date;lastToday=now.Date;Render();}
         var minute=new DateTime(now.Year,now.Month,now.Day,now.Hour,now.Minute,0);
-        if(renderedMinute!=minute){renderedMinute=minute;Render();}
+        if(renderedMinute!=minute){UpdateWidgetClock(now);var signature=WidgetLessonSignature(now);if(signature!=widgetLessonSignature){if(widgetDatePicker?.IsKeyboardFocusWithin==true||widgetDatePicker?.IsDropDownOpen==true||System.Windows.Input.Mouse.Captured!=null)return;Render();}renderedMinute=minute;}
     }
     private void Render()=>RenderWidget();
-    private void Menu()
+    private void Menu()=>OpenManagement();
+    private Window Dialog(string title,double width=760,double height=500)
     {
-        var w=Dialog("設定・管理",600,780);w.MinWidth=460;
-        w.Height=Math.Min(780,SystemParameters.WorkArea.Height-40);
-        w.Content=BuildSettingsContent(action=>{w.Close();action();},w.Close);
-        w.ShowDialog();
+        var work=SystemParameters.WorkArea;
+        var w=new Window{Title=title,Owner=management??this,WindowStartupLocation=WindowStartupLocation.CenterOwner,
+            Width=Math.Min(width,work.Width),Height=Math.Min(height,work.Height),MinWidth=Math.Min(320,work.Width),MinHeight=Math.Min(240,work.Height),
+            FontFamily=FontFamily,Background=Paper,Foreground=Ink,Icon=Icon};
+        ApplyDeskChrome(w);return w;
     }
-    private Window Dialog(string title,double width=760,double height=500)=>new()
-    { Title=title, Owner=this, WindowStartupLocation=WindowStartupLocation.CenterOwner, Width=width, Height=height, MinWidth=320, MinHeight=240, FontFamily=FontFamily, Background=Paper, Foreground=Ink };
     private static DataGridTextColumn Col(string title,string property)=>new()
     { Header=title, Binding=new Binding(property){UpdateSourceTrigger=UpdateSourceTrigger.LostFocus}, Width=new DataGridLength(1,DataGridLengthUnitType.Star) };
     private static DataGridCheckBoxColumn CheckCol(string title,string property)=>new(){Header=title,Binding=new Binding(property),Width=100};
@@ -109,7 +110,7 @@ internal sealed partial class DeskWindow : Window
         var grid=new DataGrid { ItemsSource=rows, AutoGenerateColumns=false, CanUserAddRows=false, CanUserDeleteRows=false, SelectionMode=DataGridSelectionMode.Extended, HeadersVisibility=DataGridHeadersVisibility.Column, RowHeaderWidth=0, Margin=new Thickness(0,0,0,8) };
         foreach(var c in columns) grid.Columns.Add(c);
         var bar=Horizontal(); DockPanel.SetDock(bar,Dock.Bottom);
-        Add(bar,Btn("追加",()=>{rows.Add(new T());grid.ScrollIntoView(rows.Last());}),Btn("削除",()=>{ foreach(var row in grid.SelectedItems.Cast<T>().ToList()) rows.Remove(row); }),
+        Add(bar,Btn("追加",()=>{rows.Add(new T());grid.ScrollIntoView(rows.Last());}),Btn("削除",()=>{ if(grid.SelectedItems.Count==0||MessageBox.Show(w,"選択行を削除しますか？（保存で確定）","確認",MessageBoxButton.YesNo)!=MessageBoxResult.Yes)return;foreach(var row in grid.SelectedItems.Cast<T>().ToList()) rows.Remove(row); }),
             Btn("保存",()=>{ if(!grid.CommitEdit(DataGridEditingUnit.Cell,true)||!grid.CommitEdit(DataGridEditingUnit.Row,true)) return; set(d,rows.ToList()); if(Commit(d)) w.Close(); }),Btn("取消",w.Close));
         p.Children.Add(bar);p.Children.Add(grid);w.Content=p;w.ShowDialog();
     }

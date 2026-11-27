@@ -54,6 +54,30 @@ jobs:
           $p = Start-Process -FilePath (Resolve-Path publish/KOMU-DESK.exe) -ArgumentList @("--smoke", "retention-preview.png", "--retention-test") -PassThru
           if (!$p.WaitForExit(30000)) { $p.Kill(); throw "Retention test timed out" }
           if ($p.ExitCode -ne 0 -or !(Test-Path retention-preview.png)) { throw "Retention test failed" }
+      - name: Render management pages and all calendar modes
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force ui3-preview | Out-Null
+          $p = Start-Process -FilePath (Resolve-Path publish/KOMU-DESK.exe) -ArgumentList @("--smoke","ui3-preview/interactions.png","--page=calendar","--ui3-interaction") -PassThru
+          if (!$p.WaitForExit(30000)) { $p.Kill(); throw "UI3 interaction timed out" }
+          if ($p.ExitCode -ne 0 -or !(Test-Path "ui3-preview/interactions.png")) { throw "UI3 interaction failed" }
+          $cases = @('home','calendar','timetable','counts','tasks','reports','google','settings','updates')
+          foreach ($page in $cases) {
+            $p = Start-Process -FilePath (Resolve-Path publish/KOMU-DESK.exe) -ArgumentList @("--smoke","ui3-preview/$page.png","--page=$page") -PassThru
+            if (!$p.WaitForExit(30000)) { $p.Kill(); throw "UI3 $page timed out" }
+            if ($p.ExitCode -ne 0 -or !(Test-Path "ui3-preview/$page.png")) { throw "UI3 $page failed" }
+          }
+          foreach ($mode in @(@("week","週"),@("day","日"),@("list","一覧"))) {
+            $file = "ui3-preview/calendar-$($mode[0]).png"
+            $p = Start-Process -FilePath (Resolve-Path publish/KOMU-DESK.exe) -ArgumentList @("--smoke",$file,"--page=calendar","--mode=$($mode[1])") -PassThru
+            if (!$p.WaitForExit(30000)) { $p.Kill(); throw "UI3 calendar timed out" }
+            if ($p.ExitCode -ne 0 -or !(Test-Path $file)) { throw "UI3 calendar failed" }
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: komu-desk-ui3-images
+          path: ui3-preview/
+          retention-days: 14
       - uses: actions/upload-artifact@v4
         with:
           name: komu-desk-tray-picker-image

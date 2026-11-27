@@ -44,6 +44,8 @@ internal sealed partial class DeskWindow
         bool lightInk=LightInk();
         var dpi=VisualTreeHelper.GetDpi(this).DpiScaleX;
         Icon=TrayWindowImage(id,IconSize((int)Math.Round(32*dpi)),lightInk);
+        if(Template?.FindName("brandIcon",this) is Image brand)brand.Source=TrayPng(id);
+        if(management?.Template?.FindName("brandIcon",management) is Image other)other.Source=TrayPng(id);
         if(tray==null)return;
         var fresh=TrayNative(id,IconSize((int)Math.Round(16*dpi)),lightInk);
         var old=nativeTrayIcon;
