@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -133,7 +134,7 @@ internal sealed partial class DeskWindow
     private IEnumerable<ScheduleInput> ScheduleInputs(SchoolData d)
     {
         foreach(var e in d.Events)yield return new(SchoolData.ParseDate(e.Date),e.Title,"local");
-        var state=googleState;var snapshot=state?.Snapshot;if(snapshot==null||state==null)return;
+        var state=googleState;var snapshot=state?.Snapshot;if(snapshot==null||state==null)yield break;
         var from=SchoolData.ParseDate(d.YearFrom);var to=SchoolData.ParseDate(d.YearTo);
         foreach(var date in Enumerable.Range(0,(to-from).Days+1).Select(n=>from.AddDays(n)))
             if(string.CompareOrdinal(SchoolData.Iso(date),snapshot.From)>=0&&string.CompareOrdinal(SchoolData.Iso(date),snapshot.To)<=0)
