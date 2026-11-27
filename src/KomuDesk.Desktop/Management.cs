@@ -113,14 +113,14 @@ internal sealed partial class DeskWindow
     private static string SourceIcon(string source)=>source switch{"lesson"=>"timetable","task"=>"tasks","google"=>"connection",_=>"calendar"};
     private FrameworkElement AgendaLine(AgendaRow r,Action<Action> modal)
     {
-        var line=new DockPanel{Margin=new Thickness(0,2,0,2),MinHeight=29};
-        var time=Text(r.Time,11,false,Muted);time.Width=72;DockPanel.SetDock(time,Dock.Left);line.Children.Add(time);
-        var state=Text(StateText(r),11,false,Muted);state.Margin=new Thickness(8,0,0,0);DockPanel.SetDock(state,Dock.Right);line.Children.Add(state);
+        var tone=ToneFor(r);var line=new DockPanel{Margin=new Thickness(0,2,0,2),MinHeight=32};var mark=ToneMark(tone,22);DockPanel.SetDock(mark,Dock.Left);line.Children.Add(mark);
+        var time=Text(r.Time,11,true,tone.Accent);time.Width=56;DockPanel.SetDock(time,Dock.Left);line.Children.Add(time);
+        var state=Text(r.Source=="task"&&r.State!="done"&&r.Day<DateTime.Today?"期限超過":StateText(r),10,false,tone.Accent);state.Margin=new Thickness(8,0,0,0);DockPanel.SetDock(state,Dock.Right);line.Children.Add(state);
         var label=new WrapPanel{VerticalAlignment=VerticalAlignment.Center};
         var icon=Glyph(SourceIcon(r.Source),15);icon.Margin=new Thickness(0,0,6,0);label.Children.Add(icon);
         if(r.Lesson!=null)AddGroupLabels(label,r.Lesson.GroupId);else label.Children.Add(Text(r.Title,13));
         var b=WidgetButton(label,r.Title+" "+StateText(r),()=>modal(()=>OpenAgendaRow(r)),false);b.HorizontalContentAlignment=HorizontalAlignment.Left;
-        line.Children.Add(b);return line;
+        line.Children.Add(b);return ToneCard(line,tone);
     }
     private void OpenAgendaRow(AgendaRow r)
     {
@@ -182,11 +182,11 @@ internal sealed partial class DeskWindow
         pick.SelectedDateChanged+=(_,_)=>{if(pick.SelectedDate is DateTime d){agendaDate=d.Date;if(agendaMode=="一覧"){agendaFrom=d;agendaTo=d.AddDays(30);}refresh();}};toolbar.Children.Add(pick);
         foreach(var pair in new[]{("月","calendar-month"),("週","calendar-week"),("日","calendar-day"),("一覧","calendar-list")})
         {var b=Tool(pair.Item2,pair.Item1,()=>{agendaMode=pair.Item1;refresh();});if(agendaMode==pair.Item1){b.Background=Soft;b.BorderBrush=Ink;}toolbar.Children.Add(b);}
-        Add(toolbar,Tool("sync","同期",()=>modal(GoogleSettings)),Tool("spreadsheet","Excel予定",()=>modal(ImportMore)),Tool("spreadsheet","予定貼付",()=>modal(PasteEvents)),Tool("calendar","変更候補",()=>modal(ScheduleReview)),Tool("add","予定",()=>modal(()=>EditAgendaEvent(agendaDate))));
+        Add(toolbar,Tool("sync","同期",()=>modal(GoogleSettings)),Tool("spreadsheet","Excel予定",()=>modal(ImportMore)),Tool("spreadsheet","予定貼付",()=>modal(PasteEvents)),Tool("calendar","変更候補",()=>modal(ScheduleReview)),Tool("add","予定を追加",()=>modal(()=>EditAgendaEvent(agendaDate))),Tool("tasks","タスクを追加",()=>modal(()=>EditAgendaTask(null,agendaDate))));
         header.Children.Add(toolbar);
         var filters=new WrapPanel{Margin=new Thickness(0,5,0,5)};filters.Children.Add(Glyph("filter",18));
         for(int i=0;i<SourceIds.Length;i++){int n=i;var cb=new CheckBox{Content=SourceNames[i],IsChecked=agendaSources[i],Margin=new Thickness(5),VerticalContentAlignment=VerticalAlignment.Center};cb.Click+=(_,_)=>{agendaSources[n]=cb.IsChecked==true;refresh();};filters.Children.Add(cb);}
-        var completed=new CheckBox{Content="完了も表示",IsChecked=showCompleted,Margin=new Thickness(5)};completed.Click+=(_,_)=>{showCompleted=completed.IsChecked==true;refresh();};filters.Children.Add(completed);header.Children.Add(filters);
+        var completed=new CheckBox{Content="完了も表示",IsChecked=showCompleted,Margin=new Thickness(5)};completed.Click+=(_,_)=>{showCompleted=completed.IsChecked==true;refresh();};filters.Children.Add(completed);header.Children.Add(filters);header.Children.Add(ColorLegend());
         if(agendaMode=="一覧")
         {
             var ranges=new WrapPanel();
@@ -209,17 +209,17 @@ internal sealed partial class DeskWindow
         for(int i=0;i<length;i++)
         {
             var d=first.AddDays(i);var rows=Rows(d);var content=new StackPanel();
-            Add(content,Text(d.Day.ToString(),14,d==agendaDate,d.Month==agendaDate.Month?Ink:Muted));
-            if(rows.Count>0){foreach(var r in rows.Take(agendaMode=="週"?5:2)){var t=Text(r.Time+" "+r.Title,10,false,Muted);t.TextWrapping=TextWrapping.NoWrap;t.TextTrimming=TextTrimming.CharacterEllipsis;content.Children.Add(t);}if(rows.Count>(agendaMode=="週"?5:2))content.Children.Add(Text("ほか "+(rows.Count-(agendaMode=="週"?5:2))+"件",10,false,Muted));}
-            var b=WidgetButton(content,DayText(d)+" "+rows.Count+"件",()=>{agendaDate=d;refresh();});b.MinHeight=64;b.Padding=new Thickness(4,3,4,3);b.Margin=new Thickness(1);b.HorizontalContentAlignment=HorizontalAlignment.Stretch;
+            var dateNumber=Text(d.Day.ToString(),14,d==agendaDate||d==DateTime.Today,d.Month!=agendaDate.Month?Muted:d.DayOfWeek==DayOfWeek.Sunday?LateTone.Accent:d.DayOfWeek==DayOfWeek.Saturday?LocalTone.Accent:Ink);Add(content,dateNumber);
+            if(rows.Count>0){foreach(var r in rows.Take(3))content.Children.Add(MonthEntry(r));if(rows.Count>3)content.Children.Add(Text("ほか "+(rows.Count-3)+"件",10,false,Muted));}
+            var b=WidgetButton(content,DayText(d)+" "+rows.Count+"件",()=>{agendaDate=d;refresh();});b.MinHeight=92;b.Padding=new Thickness(3,3,3,3);b.Margin=new Thickness(1);b.HorizontalContentAlignment=HorizontalAlignment.Stretch;
             if(d==agendaDate){b.Background=Soft;b.BorderBrush=Ink;b.BorderThickness=new Thickness(2);}else if(d==DateTime.Today)b.BorderBrush=Muted;
             Place(b,i/7+1,i%7);
         }
-        var split=new Grid();var left=new ColumnDefinition{Width=new GridLength(2,GridUnitType.Star)};var right=new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)};
+        var split=new Grid();var left=new ColumnDefinition{Width=new GridLength(2.5,GridUnitType.Star)};var right=new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)};
         split.ColumnDefinitions.Add(left);split.ColumnDefinitions.Add(right);split.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});split.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
         var monthPanel=new StackPanel();Add(monthPanel,Text(agendaDate.ToString("yyyy年M月"),18,true),days);
         var details=DayDetail(agendaDate,modal);Grid.SetColumn(details,1);split.Children.Add(monthPanel);split.Children.Add(details);
-        split.SizeChanged+=(_,_)=>{bool narrow=split.ActualWidth<690;right.Width=narrow?new GridLength(0):new GridLength(1,GridUnitType.Star);Grid.SetColumn(details,narrow?0:1);Grid.SetRow(details,narrow?1:0);};
+        split.SizeChanged+=(_,_)=>{bool narrow=split.ActualWidth<780;right.Width=narrow?new GridLength(0):new GridLength(1,GridUnitType.Star);Grid.SetColumn(details,narrow?0:1);Grid.SetRow(details,narrow?1:0);};
         outer.Children.Add(PageScroll(split));return outer;
     }
     internal void SetAgendaModeForSmoke(string mode){agendaMode=mode;}
@@ -350,8 +350,8 @@ internal sealed partial class DeskWindow
             foreach(string group in new[]{"期限超過","今日","近日","期限なし","完了"})
             {
                 var rows=data.Tasks.Where(t=>Group(t)==group&&t.Title.Contains(search.Text,StringComparison.CurrentCultureIgnoreCase)).OrderBy(t=>t.Due).ToArray();
-                if(rows.Length==0||group=="完了"&&!taskCompleted)continue;items.Children.Add(Text(group+"  "+rows.Length+"件",14,true));
-                foreach(var t in rows){var row=new DockPanel();var cb=new CheckBox{IsChecked=t.Done,Margin=new Thickness(5),VerticalAlignment=VerticalAlignment.Center};cb.Click+=(_,_)=>{var d=data.Clone();d.Tasks.Single(x=>x.Id==t.Id).Done=cb.IsChecked==true;if(Commit(d))Fill();else cb.IsChecked=t.Done;};DockPanel.SetDock(cb,Dock.Left);row.Children.Add(cb);row.Children.Add(WidgetButton(t.Title+"  "+t.Due,"編集",()=>modal(()=>EditAgendaTask(t.Id)),false));items.Children.Add(CardBox(row));}
+                if(rows.Length==0||group=="完了"&&!taskCompleted)continue;items.Children.Add(Text(group+"  "+rows.Length+"件",14,true,group=="期限超過"?LateTone.Accent:Ink));
+                foreach(var t in rows){var row=new DockPanel();var cb=new CheckBox{IsChecked=t.Done,Margin=new Thickness(5),VerticalAlignment=VerticalAlignment.Center};cb.Click+=(_,_)=>{var d=data.Clone();d.Tasks.Single(x=>x.Id==t.Id).Done=cb.IsChecked==true;if(Commit(d))Fill();else cb.IsChecked=t.Done;};DockPanel.SetDock(cb,Dock.Left);row.Children.Add(cb);row.Children.Add(WidgetButton(t.Title+"  "+t.Due,"編集",()=>modal(()=>EditAgendaTask(t.Id)),false));items.Children.Add(ToneCard(row,t.Done?QuietTone:t.Due!=""&&string.CompareOrdinal(t.Due,now)<0?LateTone:TaskTone));}
             }
             if(items.Children.Count==0)items.Children.Add(Text("タスクはありません。",13,false,Muted));
         }
