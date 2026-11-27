@@ -63,8 +63,8 @@ internal sealed partial class DeskWindow
         };
         var retentionHint=Text("新版の正常終了後、更新管理下の古い版だけを整理します。手動展開版や授業データは対象外です。",12,false,Muted);
         CancellationTokenSource? operation=null;
-        var check=new Button{Content="今すぐ確認",Margin=new Thickness(2),Padding=new Thickness(8,6,8,6)};
-        var apply=new Button{Content="ダウンロードして更新",Margin=new Thickness(2),Padding=new Thickness(8,6,8,6)};
+        var check=Tool("sync","今すぐ確認",()=>{});
+        var apply=Tool("update","ダウンロードして更新",()=>{});
         var cancel=Btn("中止",()=>operation?.Cancel());cancel.IsEnabled=false;
         void Display(){apply.IsEnabled=availableUpdate!=null&&operation==null;history.Text=HistoryLabel();status.Text=availableUpdate==null?(HasUpdateNotice?$"前回確認した新版：{updateState.LatestTag}（再確認してください）":$"現在：{UpdateInstall.Current} preview"):$"新しい版：{availableUpdate.Tag}（約 {availableUpdate.Size/1_000_000} MB）";}
         async Task Run(Func<CancellationToken,Task> task)
@@ -88,7 +88,7 @@ internal sealed partial class DeskWindow
             if(MessageBox.Show(w,"GitHubから評価版を取得し、検証後に再起動します。未署名の評価版です。学校の許可がある環境で実行してください。直前版は既定で復旧用に残ります。","更新の確認",MessageBoxButton.YesNo)!=MessageBoxResult.Yes)return;
             string? staged=null;
             await Run(async ct=>{progress.Value=0;progress.Visibility=Visibility.Visible;status.Text="更新処理中";phaseLabel.Text="準備中";progress.IsIndeterminate=true;using var client=new UpdateClient();staged=await client.Stage(offer,ct,new Progress<long>(n=>{progress.IsIndeterminate=false;progress.Value=Math.Min(85,n*85.0/offer.Size);phaseLabel.Text=$"ダウンロード中 {n*100.0/offer.Size:0}%";}),new Progress<string>(p=>{phaseLabel.Text=p;progress.IsIndeterminate=p!="ダウンロード中";}));progress.IsIndeterminate=false;progress.Value=100;phaseLabel.Text="検証完了。再起動します。";});
-            if(staged!=null){PendingUpdate=staged;w.Close();Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle,new Action(()=>{Close();if(!closing){PendingUpdate=null;MessageBox.Show(this,"保存または終了が完了しなかったため、更新を適用しませんでした。");}}));}
+            if(staged!=null){PendingUpdate=staged;w.Close();Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle,new Action(()=>{management?.Close();Close();if(!closing){PendingUpdate=null;MessageBox.Show(this,"保存または終了が完了しなかったため、更新を適用しませんでした。");}}));}
         };
         w.Closing+=(_,e)=>{if(operation!=null){operation.Cancel();e.Cancel=true;}};
         Add(panel,Text("KOMU DESK 更新",20,true),status,detail,history,opt,Text("保存容量の管理",13,true),retention,retentionHint,check,apply,phaseLabel,progress,cancel,Text("更新は本人の確認後のみ適用します。自動確認OFFでも手動確認できます。旧版は保持設定に従い正常終了後に整理します。",12,false,Muted),Btn("閉じる",w.Close));
