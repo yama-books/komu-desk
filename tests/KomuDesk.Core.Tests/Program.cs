@@ -72,4 +72,5 @@ finally{Directory.Delete(temp,true);}
 passed+=ImportCases.Run();
 passed+=await CalendarCases.Run();
 passed+=ReportCases.Run();
+passed+=UpdateCases.Run();
 Console.WriteLine($"TOTAL {passed} PASS");
