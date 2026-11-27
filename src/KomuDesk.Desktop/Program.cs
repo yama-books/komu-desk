@@ -14,6 +14,8 @@ internal static class Program
     public static int Main(string[] args)
     {
         bool smoke=args.Contains("--smoke");
+        bool updating=args.Length>0&&args[0]=="--update-wait";
+        try{if(updating)UpdateInstall.WaitForOld(args);else if(UpdateInstall.Redirect(args))return 0;}catch{MessageBox.Show("更新版の起動に失敗しました。旧版を起動してください。","KOMU DESK");return 1;}
         using var mutex = new Mutex(true, smoke?@"Local\KomuDesk.Smoke":@"Local\KomuDesk.Desktop", out bool first);
         if (!first) { if(!smoke)MessageBox.Show("KOMU DESK は既に起動しています。", "KOMU DESK"); return 1; }
         try
@@ -48,7 +50,10 @@ internal static class Program
                     catch{app.Shutdown(1);}
                 }));
             }
-            return app.Run(window);
+            if(!demo)window.ContentRendered+=(_,_)=>{try{if(args.Contains("--no-update-redirect"))UpdateInstall.ClearPointer();else UpdateInstall.Activate();}catch{}};
+            int result=app.Run(window);
+            if(window.PendingUpdate!=null)UpdateInstall.Launch(window.PendingUpdate,Environment.ProcessId);
+            return result;
         }
         catch (Exception ex)
         {
