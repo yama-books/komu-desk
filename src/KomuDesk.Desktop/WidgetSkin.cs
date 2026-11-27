@@ -97,19 +97,14 @@ internal sealed partial class DeskWindow
     }
     private void BuildWidget()
     {
-        WindowStyle=WindowStyle.None; ResizeMode=ResizeMode.CanResize; AllowsTransparency=false;
-        WindowChrome.SetWindowChrome(this,new WindowChrome{CaptionHeight=0,ResizeBorderThickness=new Thickness(6),GlassFrameThickness=new Thickness(0),CornerRadius=new CornerRadius(0),UseAeroCaptionButtons=false});
-        var root=new DockPanel{Margin=new Thickness(16,12,16,12)};
+        ApplyDeskChrome(this,false);
+        var root=new DockPanel{Margin=new Thickness(12,8,12,10)};
         var header=new StackPanel();
-        var brand=new DockPanel{Margin=new Thickness(0,0,0,12)};
+        var brand=new DockPanel{Margin=new Thickness(0,0,0,6)};
         var buttons=Horizontal();DockPanel.SetDock(buttons,Dock.Right);
-        Add(buttons,WidgetButton(AssetIcon("settings",17),"設定・管理",Menu),WidgetButton("⌖","最前面切替",ToggleTop),WidgetButton("▫","ミニ表示切替",ToggleMini),
-            WidgetButton("−","最小化",()=>WindowState=WindowState.Minimized),WidgetButton("×","閉じる",Close));
+        Add(buttons,Tool("settings","管理",Menu),Tool("pin","最前面切替",ToggleTop,false),Tool("compact","ミニ表示切替",ToggleMini,false));
         brand.Children.Add(buttons);
-        var logo=Text("KOMU DESK",12,true);logo.Cursor=System.Windows.Input.Cursors.SizeAll;logo.ToolTip="ドラッグして移動";
-        logo.MouseLeftButtonDown+=(_,e)=>{if(e.LeftButton==System.Windows.Input.MouseButtonState.Pressed)try{DragMove();}catch(InvalidOperationException){}};
-        brand.Children.Add(logo);
-        header.Children.Add(brand);
+        brand.Children.Add(Text("TODAY",11,true,Muted));header.Children.Add(brand);
         var timeRow=new DockPanel();
         var cat=Cat();DockPanel.SetDock(cat,Dock.Right);timeRow.Children.Add(cat);
         var timeStack=new StackPanel();
@@ -160,12 +155,12 @@ internal sealed partial class DeskWindow
         if(data.Display.Mini)return;
         var dateRow=new DockPanel{Margin=new Thickness(0,5,0,8)};
         var nav=Horizontal();DockPanel.SetDock(nav,Dock.Right);
-        Add(nav,WidgetButton("‹","前日",()=>{day=day.AddDays(-1);Render();}),WidgetButton("›","翌日",()=>{day=day.AddDays(1);Render();}),WidgetButton("今日","今日に戻る",()=>{day=DateTime.Today;Render();}));
+        Add(nav,WidgetButton(Glyph("chevron-left",15),"前日",()=>{day=day.AddDays(-1);Render();}),WidgetButton(Glyph("chevron-right",15),"翌日",()=>{day=day.AddDays(1);Render();}),WidgetButton(GlyphText("calendar-today","今日",14),"今日に戻る",()=>{day=DateTime.Today;Render();}));
         dateRow.Children.Add(nav);
         var picker=new DatePicker{SelectedDate=day,Width=126,FontSize=12,BorderThickness=new Thickness(0),Background=Paper,VerticalAlignment=VerticalAlignment.Center};
         picker.SelectedDateChanged+=(_,_)=>{if(picker.SelectedDate.HasValue){day=picker.SelectedDate.Value.Date;Render();}};
         dateRow.Children.Add(picker);body.Children.Add(dateRow);
-        body.Children.Add(Heading("TIME TABLE",WidgetButton("編集","週間時間割を編集",Weekly),WidgetButton("変更","日別変更",DayChanges)));
+        body.Children.Add(Heading("TIME TABLE",WidgetButton(GlyphText("edit","編集",14),"週間時間割を編集",Weekly),WidgetButton(GlyphText("edit","変更",14),"日別変更",DayChanges)));
         var now=DateTime.Now;var result=LessonEngine.Day(data,day,now);
         if(!result.Configured)body.Children.Add(Small("この日の時間割は未設定です。"));
         var highlight=day.Date==now.Date?result.Lessons.FirstOrDefault(l=>l.State=="remaining"):null;
@@ -188,7 +183,7 @@ internal sealed partial class DeskWindow
             body.Children.Add(new Border{Background=ReferenceEquals(l,highlight)&&l!=null?Soft:Brushes.Transparent,CornerRadius=new CornerRadius(5),Padding=new Thickness(5,1,5,1),Child=row});
         }
         body.Children.Add(Hairline());
-        body.Children.Add(Heading("CALENDAR",WidgetButton("＋","ローカル予定を編集",Events),WidgetButton(AssetIcon("update",16),"Googleカレンダー設定",GoogleSettings)));
+        body.Children.Add(Heading("CALENDAR",WidgetButton(GlyphText("calendar","一覧",14),"カレンダーを開く",OpenAgenda),WidgetButton(Glyph("add",16),"予定追加",()=>EditAgendaEvent(day)),WidgetButton(Glyph("sync",16),"Googleカレンダー設定",GoogleSettings)));
         var events=data.Events.Where(e=>e.Date==SchoolData.Iso(day)).Select(e=>(Time:e.Time==""?"終日":e.Time,Title:e.Title,Source:"")).ToList();
         var snapshot=googleState?.Snapshot;
         if(snapshot!=null&&string.CompareOrdinal(SchoolData.Iso(day),snapshot.From)>=0&&string.CompareOrdinal(SchoolData.Iso(day),snapshot.To)<=0)
@@ -203,7 +198,7 @@ internal sealed partial class DeskWindow
         if(events.Count==0)body.Children.Add(Small("予定なし"));
         if(googleState!=null){body.Children.Add(Small(googleStatus));if(snapshot!=null)body.Children.Add(Small("最終取得 "+snapshot.LastSuccessUtc.ToLocalTime().ToString("M/d HH:mm")+"（保存済み）"));}
         body.Children.Add(Hairline());
-        body.Children.Add(Heading("TASKS",WidgetButton("＋","タスクを編集",Tasks)));
+        body.Children.Add(Heading("TASKS",WidgetButton(Glyph("add",16),"タスク追加",()=>EditAgendaTask(null,day))));
         foreach(var task in data.Tasks.OrderBy(t=>t.Done).ThenBy(t=>t.Due==""?"9999":t.Due).ToList())
         {
             var text=Text(task.Title+(task.Due==""?"":$"  {task.Due}"),13,false,task.Done?Muted:Ink);
