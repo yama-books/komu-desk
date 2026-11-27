@@ -54,40 +54,17 @@ internal sealed partial class DeskWindow
         }
         return p;
     }
-    // Keep the native DatePicker text, keyboard and popup behavior; replace only its presentation.
-    private static ControlTemplate CalendarPickerTemplate()=>(ControlTemplate)System.Windows.Markup.XamlReader.Parse("""
-    <ControlTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" TargetType="DatePicker">
-      <Border x:Name="frame" BorderBrush="#C8C8C4" BorderThickness="1" CornerRadius="6" Background="#FFFFFF">
-        <Grid x:Name="PART_Root">
-          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="34"/></Grid.ColumnDefinitions>
-          <DatePickerTextBox x:Name="PART_TextBox" Grid.Column="0" BorderThickness="0" Background="Transparent" Padding="5,3" VerticalContentAlignment="Center" Foreground="#202020"/>
-          <Button x:Name="PART_Button" Grid.Column="1" Focusable="False" Padding="0" ToolTip="カレンダーを開く" AutomationProperties.Name="カレンダーを開く">
-            <Button.Template>
-              <ControlTemplate TargetType="Button">
-                <Border x:Name="face" Background="Transparent" CornerRadius="5" Padding="7">
-                  <Viewbox Width="17" Height="17">
-                    <Canvas Width="24" Height="24">
-                      <Path Data="M3,5 H21 V21 H3 Z M7,3 V7 M17,3 V7 M3,10 H21 M7,14 H9 M12,14 H14 M17,14 H19 M7,18 H9 M12,18 H14" Stroke="#303030" StrokeThickness="1.7" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                    </Canvas>
-                  </Viewbox>
-                </Border>
-                <ControlTemplate.Triggers>
-                  <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="face" Property="Background" Value="#E8E8E5"/></Trigger>
-                  <Trigger Property="IsPressed" Value="True"><Setter TargetName="face" Property="Background" Value="#D8D8D4"/></Trigger>
-                </ControlTemplate.Triggers>
-              </ControlTemplate>
-            </Button.Template>
-          </Button>
-          <Popup x:Name="PART_Popup" Placement="Bottom" PlacementTarget="{Binding ElementName=PART_Root}" AllowsTransparency="True" StaysOpen="False"/>
-        </Grid>
-      </Border>
-      <ControlTemplate.Triggers>
-        <Trigger Property="IsEnabled" Value="False"><Setter TargetName="frame" Property="Opacity" Value="0.5"/></Trigger>
-        <Trigger Property="IsKeyboardFocusWithin" Value="True"><Setter TargetName="frame" Property="BorderBrush" Value="#555555"/></Trigger>
-      </ControlTemplate.Triggers>
-    </ControlTemplate>
-    """);
+    // Preserve the entire native date picker and calendar popup, including IME and accessibility.
+    private static void StyleCalendarButton(DatePicker picker)
+    {
+        picker.ApplyTemplate();
+        if(picker.Template?.FindName("PART_Button",picker) is not Button button)return;
+        button.Template=Flat;button.Content=Glyph("calendar-month",16);
+        button.Background=White;button.BorderBrush=Line;button.BorderThickness=new Thickness(1);
+        button.Padding=new Thickness(3);button.MinWidth=25;button.MinHeight=25;button.Focusable=false;
+        button.ToolTip="カレンダーを開く";
+        System.Windows.Automation.AutomationProperties.SetName(button,"カレンダーを開く");
+    }
     private static FrameworkElement DateShortcuts(DatePicker date,Action? activate=null)
     {
         var row=new WrapPanel{Margin=new Thickness(0,3,0,3)};
@@ -103,8 +80,8 @@ internal sealed partial class DeskWindow
     internal void CheckCalendarPicker()
     {
         if(!demo)throw new InvalidOperationException("demo only");
-        var p=new DatePicker{SelectedDate=DateTime.Today};Content=p;UpdateLayout();p.ApplyTemplate();
-        if(p.Template.FindName("PART_Button",p) is not Button b||p.Template.FindName("PART_TextBox",p) is not DatePickerTextBox||p.Template.FindName("PART_Popup",p) is not Popup)throw new InvalidOperationException("date picker template parts");
+        var p=new DatePicker{SelectedDate=DateTime.Today};Content=p;UpdateLayout();StyleCalendarButton(p);
+        if(p.Template.FindName("PART_Button",p) is not Button b||b.Content is not Viewbox||p.Template.FindName("PART_TextBox",p) is not DatePickerTextBox||p.Template.FindName("PART_Popup",p) is not Popup)throw new InvalidOperationException("date picker template parts");
         b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));UpdateLayout();
         if(!p.IsDropDownOpen)throw new InvalidOperationException("calendar popup open");
         p.IsDropDownOpen=false;p.SelectedDate=DateTime.Today.AddDays(1);

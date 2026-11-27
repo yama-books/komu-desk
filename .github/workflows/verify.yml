@@ -101,6 +101,11 @@ jobs:
           $p = Start-Process -FilePath (Resolve-Path publish/KOMU-DESK.exe) -ArgumentList @("--smoke","ui3-preview/calendar-picker.png","--picker-interaction") -PassThru
           if (!$p.WaitForExit(30000)) { $p.Kill(); throw "Calendar picker timed out" }
           if ($p.ExitCode -ne 0 -or !(Test-Path "ui3-preview/calendar-picker.png")) { throw "Calendar picker failed" }
+      - name: Display fictional smoke diagnostics
+        if: failure()
+        shell: pwsh
+        run: |
+          Get-ChildItem -Path . -Recurse -Filter "*.png.error.txt" | ForEach-Object { Write-Host $_.FullName; Get-Content $_.FullName }
       - uses: actions/upload-artifact@v4
         with:
           name: komu-desk-ui3-images

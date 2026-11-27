@@ -66,7 +66,7 @@ internal static class Program
             if(smoke&&args.Contains("--task-form")){window.Width=470;window.Height=520;window.Content=window.BuildFormForSmoke(true);}
             if(smoke)
             {
-                app.DispatcherUnhandledException+=(_,e)=>{e.Handled=true;app.Shutdown(1);};
+                app.DispatcherUnhandledException+=(_,e)=>{WriteSmokeFailure(args,e.Exception);e.Handled=true;app.Shutdown(1);};
                 window.Loaded+=(_,_)=>window.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle,new Action(()=>
                 {
                     try
@@ -89,7 +89,7 @@ internal static class Program
                         }
                         app.Shutdown(0);
                     }
-                    catch{app.Shutdown(1);}
+                    catch(Exception ex){WriteSmokeFailure(args,ex);app.Shutdown(1);}
                 }));
             }
             if(!demo)window.ContentRendered+=(_,_)=>{try{if(args.Contains("--no-update-redirect"))UpdateInstall.ClearPointer();else UpdateInstall.Activate();}catch{}};
@@ -103,8 +103,12 @@ internal static class Program
         }
         catch (Exception ex)
         {
-            if(!smoke)MessageBox.Show("起動できませんでした。データは上書きしていません。\n" + ex.GetType().Name, "KOMU DESK");
+            if(smoke)WriteSmokeFailure(args,ex);else MessageBox.Show("起動できませんでした。データは上書きしていません。\n" + ex.GetType().Name, "KOMU DESK");
             return 1;
         }
+    }
+    private static void WriteSmokeFailure(string[] args,Exception ex)
+    {
+        try{int i=Array.IndexOf(args,"--smoke");if(i>=0&&i+1<args.Length)File.WriteAllText(args[i+1]+".error.txt",ex.ToString());}catch{}
     }
 }
