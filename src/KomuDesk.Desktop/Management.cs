@@ -303,14 +303,45 @@ internal sealed partial class DeskWindow
         }
         var nav=new WrapPanel();Add(nav,Tool("chevron-left","前週",()=>{agendaDate=agendaDate.AddDays(-7);refreshManagement?.Invoke();}),Text(DayText(start)+" ～ "+DayText(start.AddDays(6))),Tool("chevron-right","翌週",()=>{agendaDate=agendaDate.AddDays(7);refreshManagement?.Invoke();}));Add(p,nav,new ScrollViewer{Content=grid,HorizontalScrollBarVisibility=ScrollBarVisibility.Auto,VerticalScrollBarVisibility=ScrollBarVisibility.Disabled});return PageScroll(p);
     }
+    private sealed record CountEntry(string Id,string Name,int Confirmed,int Estimated,int Remaining,int Forecast,int Cancelled,int Unresolved);
     private FrameworkElement BuildCountsPage(Action<Action> modal)
     {
-        var root=new DockPanel();var top=new StackPanel();Add(top,Text("授業数",24,true),Text("実績・推定・残予定を区別します。",12,false,Muted));
-        var a=new DatePicker{SelectedDate=countFrom??SchoolData.ParseDate(data.YearFrom)};var b=new DatePicker{SelectedDate=countTo??SchoolData.ParseDate(data.YearTo)};
-        var grid=Table();grid.IsReadOnly=true;
+        var root=new DockPanel();var top=new StackPanel();Add(top,Text("授業数",24,true),Text("実績・推定・残予定を区別します。考査は"+(data.CountExams?"含む":"除く")+"設定です。",12,false,Muted));
+        var yearStart=SchoolData.ParseDate(data.YearFrom);var yearEnd=SchoolData.ParseDate(data.YearTo);
+        var a=new DatePicker{SelectedDate=countFrom is DateTime ca&&ca>=yearStart&&ca<=yearEnd?ca:yearStart};
+        var b=new DatePicker{SelectedDate=countTo is DateTime cb&&cb>=yearStart&&cb<=yearEnd?cb:yearEnd};
+        var grid=Table();grid.IsReadOnly=true;grid.SelectionMode=DataGridSelectionMode.Single;
         foreach(var (label,key) in new[]{("授業","Name"),("確定","Confirmed"),("推定","Estimated"),("残予定","Remaining"),("見込み","Forecast"),("休講","Cancelled"),("要確認","Unresolved")})grid.Columns.Add(Col(label,key));
-        void Count(){try{if(a.SelectedDate is DateTime from&&b.SelectedDate is DateTime to){grid.ItemsSource=LessonEngine.Count(data,from,to,DateTime.Now).Select(c=>new{Name=data.GroupName(c.GroupId),c.Confirmed,c.Estimated,c.Remaining,c.Forecast,c.Cancelled,c.Unresolved}).ToArray();countFrom=from;countTo=to;}}catch(Exception ex){Error(ex);}}
-        var bar=new WrapPanel();Add(bar,a,Text("～"),b,Tool("lesson-count","集計",Count),Tool("printer","帳票",()=>modal(Reports)));top.Children.Add(bar);DockPanel.SetDock(top,Dock.Top);Add(root,top,grid);Count();return root;
+        var summary=Text("",12,false,Muted);
+        void Count()
+        {
+            try
+            {
+                if(a.SelectedDate is not DateTime from||b.SelectedDate is not DateTime to)return;
+                var counts=LessonEngine.Count(data,from,to,DateTime.Now);
+                grid.ItemsSource=counts.Select(c=>new CountEntry(c.GroupId,data.GroupName(c.GroupId),c.Confirmed,c.Estimated,c.Remaining,c.Forecast,c.Cancelled,c.Unresolved)).ToArray();
+                countFrom=from;countTo=to;
+                var missing=Enumerable.Range(0,(to-from).Days+1).Count(n=>!LessonEngine.Day(data,from.AddDays(n),DateTime.Now).Configured);
+                summary.Text=$"確定 {counts.Sum(c=>c.Confirmed)} / 推定 {counts.Sum(c=>c.Estimated)} / 残予定 {counts.Sum(c=>c.Remaining)} / 未設定 {missing}日";
+            }
+            catch(Exception ex){Error(ex);}
+        }
+        void Detail()
+        {
+            if(grid.SelectedItem is not CountEntry item||countFrom is not DateTime from||countTo is not DateTime to)return;
+            modal(()=>{
+                var w=Dialog("授業日一覧 · "+item.Name,690,560);var p=new DockPanel{Margin=new Thickness(12)};
+                var title=Text(item.Name+"  "+SchoolData.Iso(from)+" ～ "+SchoolData.Iso(to),16,true);DockPanel.SetDock(title,Dock.Top);p.Children.Add(title);
+                var list=new StackPanel();
+                foreach(var d in Enumerable.Range(0,(to-from).Days+1).Select(n=>from.AddDays(n)))
+                    foreach(var l in LessonEngine.Day(data,d,DateTime.Now).Lessons.Where(l=>l.GroupId==item.Id))
+                    {var row=new AgendaRow(d,"lesson",l.Date+":"+l.Period,item.Name,l.Start,2,l.State,l);var line=new DockPanel();var date=Text(DayText(d)+" "+l.Period+"限",12,true);date.Width=120;DockPanel.SetDock(date,Dock.Left);line.Children.Add(date);line.Children.Add(AgendaLine(row,action=>{w.Close();action();}));list.Children.Add(line);}
+                if(list.Children.Count==0)list.Children.Add(Text("対象期間に授業はありません。",13,false,Muted));
+                p.Children.Add(PageScroll(list));w.Content=p;w.ShowDialog();
+            });
+        }
+        var bar=new WrapPanel();Add(bar,a,Text("～"),b,Tool("lesson-count","集計",Count),Tool("printer","帳票",()=>modal(Reports)),Tool("edit","授業日詳細",Detail));Add(top,bar,summary);DockPanel.SetDock(top,Dock.Top);Add(root,top,grid);
+        grid.MouseDoubleClick+=(_,_)=>Detail();Count();return root;
     }
     private FrameworkElement BuildTasksPage(Action<Action> modal)
     {
