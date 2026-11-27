@@ -68,8 +68,8 @@ internal sealed partial class DeskWindow
                 "timetable"=>BuildTimetablePage(Modal),
                 "counts"=>BuildCountsPage(Modal),
                 "tasks"=>BuildTasksPage(Modal),
-                "reports"=>SimplePage("帳票","授業日一覧を期間・担当授業で指定し、Excel出力または印刷します。",("printer","帳票を開く",()=>Modal(Reports))),
-                "google"=>SimplePage("Google連携",GoogleSummary(agendaDate),("connection","認証・対象カレンダー・同期",()=>Modal(GoogleSettings))),
+                "reports"=>BuildReportsContent(management??this),
+                "google"=>BuildGoogleOverview(Modal),
                 "settings"=>BuildSettingsPage(Modal),
                 "updates"=>SimplePage("アップデート","現在 "+UpdatePackage.Tag(UpdateInstall.Current)+" · 更新確認・容量管理",("update","更新と旧版保持設定",()=>Modal(Updates))),
                 _=>BuildHome(Select,Modal)
@@ -132,21 +132,13 @@ internal sealed partial class DeskWindow
     }
     private void EditAgendaEvent(DateTime d,string? id=null)
     {
-        var draft=data.Clone();var item=id==null?new LocalEvent{Date=SchoolData.Iso(d)}:draft.Events.Single(x=>x.Id==id);
-        var w=Dialog(id==null?"予定を追加":"予定を編集",450,360);var p=new StackPanel{Margin=new Thickness(16)};
-        var title=new TextBox{Text=item.Title,MinHeight=32};var date=new DatePicker{SelectedDate=SchoolData.ParseDate(item.Date)};var time=new TextBox{Text=item.Time,MinHeight=32};
-        var bar=new WrapPanel();Add(bar,Tool("save","保存",()=>{if(date.SelectedDate==null)return;item.Title=title.Text.Trim();item.Date=SchoolData.Iso(date.SelectedDate.Value);item.Time=time.Text.Trim();if(id==null&&!draft.Events.Contains(item))draft.Events.Add(item);if(Commit(draft))w.Close();}),Tool("close","取消",w.Close));
-        if(id!=null)bar.Children.Add(Tool("trash","削除",()=>{if(MessageBox.Show(w,"このローカル予定を削除しますか？","確認",MessageBoxButton.YesNo)!=MessageBoxResult.Yes)return;draft.Events.Remove(item);if(Commit(draft))w.Close();}));
-        Add(p,Text("予定名"),title,Text("日付"),date,Text("開始時刻（HH:mm、空欄は終日）"),time,bar);w.Content=p;w.ShowDialog();
+        var w=Dialog(id==null?"予定を追加":"予定を編集",470,450);Action done=w.Close;
+        w.Content=EventEditor(d,id,()=>done(),dirty=>done=ProtectDraft(w,dirty));w.ShowDialog();
     }
     private void EditAgendaTask(string? id,DateTime? due=null)
     {
-        var draft=data.Clone();var item=id==null?new Todo{Due=due.HasValue?SchoolData.Iso(due.Value):""}:draft.Tasks.Single(t=>t.Id==id);
-        var w=Dialog(id==null?"タスク追加":"タスク編集",450,300);var p=new StackPanel{Margin=new Thickness(16)};
-        var title=new TextBox{Text=item.Title,MinHeight=32};var date=new DatePicker{SelectedDate=item.Due==""?null:SchoolData.ParseDate(item.Due)};var done=new CheckBox{Content="完了",IsChecked=item.Done,Margin=new Thickness(0,8,0,8)};
-        var bar=new WrapPanel();Add(bar,Tool("save","保存",()=>{item.Title=title.Text.Trim();item.Due=date.SelectedDate.HasValue?SchoolData.Iso(date.SelectedDate.Value):"";item.Done=done.IsChecked==true;if(id==null&&!draft.Tasks.Contains(item))draft.Tasks.Add(item);if(Commit(draft))w.Close();}),Tool("close","取消",w.Close));
-        if(id!=null)bar.Children.Add(Tool("trash","削除",()=>{if(MessageBox.Show(w,"このタスクを削除しますか？","確認",MessageBoxButton.YesNo)!=MessageBoxResult.Yes)return;draft.Tasks.Remove(item);if(Commit(draft))w.Close();}));
-        Add(p,Text("タスク名"),title,Text("期限（空欄可）"),date,done,bar);w.Content=p;w.ShowDialog();
+        var w=Dialog(id==null?"タスク追加":"タスク編集",470,420);Action done=w.Close;
+        w.Content=TaskEditor(id,due,()=>done(),dirty=>done=ProtectDraft(w,dirty));w.ShowDialog();
     }
     private void EditDay(DateTime d)
     {
@@ -187,7 +179,7 @@ internal sealed partial class DeskWindow
         {var b=Tool(pair.Item2,pair.Item1,()=>{agendaMode=pair.Item1;refresh();});if(agendaMode==pair.Item1){b.Background=Soft;b.BorderBrush=Ink;}toolbar.Children.Add(b);}
         Add(toolbar,Tool("sync","同期",()=>modal(GoogleSettings)),Tool("add","予定",()=>modal(()=>EditAgendaEvent(agendaDate))));
         header.Children.Add(toolbar);
-        var filters=new WrapPanel{Margin=new Thickness(0,5,0,5)};
+        var filters=new WrapPanel{Margin=new Thickness(0,5,0,5)};filters.Children.Add(Glyph("filter",18));
         for(int i=0;i<SourceIds.Length;i++){int n=i;var cb=new CheckBox{Content=SourceNames[i],IsChecked=agendaSources[i],Margin=new Thickness(5),VerticalContentAlignment=VerticalAlignment.Center};cb.Click+=(_,_)=>{agendaSources[n]=cb.IsChecked==true;refresh();};filters.Children.Add(cb);}
         var completed=new CheckBox{Content="完了も表示",IsChecked=showCompleted,Margin=new Thickness(5)};completed.Click+=(_,_)=>{showCompleted=completed.IsChecked==true;refresh();};filters.Children.Add(completed);header.Children.Add(filters);
         if(agendaMode=="一覧")
@@ -214,7 +206,7 @@ internal sealed partial class DeskWindow
             var d=first.AddDays(i);var rows=Rows(d);var content=new StackPanel();
             Add(content,Text(d.Day.ToString(),14,d==agendaDate,d.Month==agendaDate.Month?Ink:Muted));
             if(rows.Count>0){foreach(var r in rows.Take(agendaMode=="週"?5:2)){var t=Text(r.Time+" "+r.Title,10,false,Muted);t.TextWrapping=TextWrapping.NoWrap;t.TextTrimming=TextTrimming.CharacterEllipsis;content.Children.Add(t);}if(rows.Count>(agendaMode=="週"?5:2))content.Children.Add(Text("ほか "+(rows.Count-(agendaMode=="週"?5:2))+"件",10,false,Muted));}
-            var b=WidgetButton(content,DayText(d)+" "+rows.Count+"件",()=>{agendaDate=d;refresh();});b.MinHeight=64;b.Margin=new Thickness(1);b.HorizontalContentAlignment=HorizontalAlignment.Stretch;
+            var b=WidgetButton(content,DayText(d)+" "+rows.Count+"件",()=>{agendaDate=d;refresh();});b.MinHeight=64;b.Padding=new Thickness(4,3,4,3);b.Margin=new Thickness(1);b.HorizontalContentAlignment=HorizontalAlignment.Stretch;
             if(d==agendaDate){b.Background=Soft;b.BorderBrush=Ink;b.BorderThickness=new Thickness(2);}else if(d==DateTime.Today)b.BorderBrush=Muted;
             Place(b,i/7+1,i%7);
         }

@@ -39,6 +39,14 @@ internal sealed partial class DeskWindow
         if(list.Count==0)body.Children.Add(Text("保存済み予定なし",12,false,Muted));
         foreach(var e in list)body.Children.Add(Text($"{e.DisplayTime(day)}   {e.Title}",13));
     }
+    private FrameworkElement BuildGoogleOverview(Action<Action> modal)
+    {
+        var p=new StackPanel();Add(p,Text("Google連携",24,true),Text("予定の読み取り専用 · 手動同期",12,false,Muted));
+        var state=new StackPanel();Add(state,Text(googleState==null?"未連携":"認証済み",20,true),Text(demo?"架空デモ · 通信しません":googleStatus,13,false,Muted),Text("同期対象期間  "+data.YearFrom+" ～ "+data.YearTo,12));
+        var snapshot=googleState?.Snapshot;state.Children.Add(Text(snapshot==null?"保存済み予定：未取得":"保存済み予定："+snapshot.Events.Count+"件 / 最終取得 "+snapshot.LastSuccessUtc.ToLocalTime().ToString("yyyy/MM/dd HH:mm"),12,false,Muted));p.Children.Add(CardBox(state));
+        var steps=new StackPanel();Add(steps,Text("連携の手順",16,true),Text("1  OAuth設定（管理者が初回のみ）"),Text("2  Googleアカウントで認証"),Text("3  対象カレンダーを選んで同期"),Primary("connection","連携・同期設定を開く",()=>modal(GoogleSettings)));p.Children.Add(CardBox(steps));
+        var privacy=new StackPanel();Add(privacy,Text("データの取り扱い",16,true),Text("認証情報と取得済み予定はこのPCに保存します。Googleへの予定書き込み・Google Tasks連携は行いません。",13,false,Muted));p.Children.Add(CardBox(privacy));return PageScroll(p);
+    }
     private void GoogleSettings()
     {
         if(demo||googleVault==null){MessageBox.Show(this,"デモモードでは外部通信を行いません。");return;}
@@ -49,6 +57,8 @@ internal sealed partial class DeskWindow
         var selection=new List<(string Id,CheckBox Box)>();
         var buttons=new List<Button>();
         CancellationTokenSource? operation=null;
+        Button? reloadControl=null,syncControl=null,disconnectControl=null,stopControl=null;
+        void ButtonStates(){bool idle=operation==null;foreach(var b in buttons)b.IsEnabled=idle;if(reloadControl!=null)reloadControl.IsEnabled=idle&&googleState!=null;if(syncControl!=null)syncControl.IsEnabled=idle&&googleState!=null&&selection.Any(x=>x.Box.IsChecked==true);if(disconnectControl!=null)disconnectControl.IsEnabled=idle&&googleState!=null;if(stopControl!=null)stopControl.IsEnabled=!idle;}
         void Build()
         {
             choices.Children.Clear();selection.Clear();
@@ -56,7 +66,7 @@ internal sealed partial class DeskWindow
             foreach(var c in googleState.Session.Calendars)
             {
                 var check=new CheckBox{Content=Text(c.Name,13),IsChecked=googleState.Session.SelectedIds.Contains(c.Id),Margin=new Thickness(0,4,0,4)};
-                choices.Children.Add(check);selection.Add((c.Id,check));
+                choices.Children.Add(check);selection.Add((c.Id,check));check.Click+=(_,_)=>ButtonStates();
             }
             if(selection.Count==0)choices.Children.Add(Text("読み取り可能なカレンダーがありません。",13,false,Muted));
         }
@@ -64,16 +74,17 @@ internal sealed partial class DeskWindow
         {
             if(operation!=null)return;
             using var cts=new CancellationTokenSource();operation=cts;
-            foreach(var button in buttons)button.IsEnabled=false;
+            ButtonStates();
             choices.IsEnabled=false;status.Text="処理中…";
             try{await task(cts.Token);status.Text=googleStatus;Build();}
             catch(OperationCanceledException){googleStatus="処理を中止しました。保存済み予定を維持します。";status.Text=googleStatus;}
             catch(Exception e){googleStatus="連携処理に失敗しました。保存済み予定を維持します。 ("+e.GetType().Name+")";status.Text=googleStatus;}
-            finally{operation=null;foreach(var button in buttons)button.IsEnabled=true;choices.IsEnabled=true;Render();}
+            finally{operation=null;ButtonStates();choices.IsEnabled=true;Render();}
         }
         Button ActionButton(string title,Func<Task> work)
         {
-            var b=WidgetButton(title,title,()=>{});b.Margin=new Thickness(2);b.Padding=new Thickness(10,6,10,6);b.MinHeight=34;
+            var icon=title.Contains("解除")?"trash":title.Contains("同期")?"sync":title.Contains("更新")?"sync":title.Contains("ファイル")?"settings":"connection";
+            var b=Tool(icon,title,()=>{});b.Margin=new Thickness(2);b.Padding=new Thickness(10,6,10,6);b.MinHeight=34;
             b.Click+=async (_,_)=>await work();buttons.Add(b);return b;
         }
         var configStatus=Text("",12,false,Muted);
@@ -143,10 +154,13 @@ internal sealed partial class DeskWindow
             if(MessageBox.Show(w,"このPCの認証情報と保存済みGoogle予定を削除します。Google側のアクセス許可の取消はGoogleアカウント設定で行ってください。","確認",MessageBoxButton.YesNo)!=MessageBoxResult.Yes)return;
             await Run(ct=>{googleVault.Clear();googleState=null;googleStatus="連携OFF";return Task.CompletedTask;});
         });
-        var stop=Btn("処理を中止",()=>operation?.Cancel());
-        Add(p,Text("Google Calendar",20,true),Text("外部通信は下の認証・一覧取得・同期ボタンを押した時のみ。Google側への予定の書き込み、Tasks、校務データの送信はありません。",13,false,Muted),
-            Text($"同期対象期間：{data.YearFrom} ～ {data.YearTo}",13),configStatus,login,details,reload,Rule(),Text("表示するカレンダー",14,true),choices,sync,disconnect,stop,Rule(),status,Btn("閉じる",w.Close));
+        var stop=Tool("close","処理を中止",()=>operation?.Cancel());reloadControl=reload;syncControl=sync;disconnectControl=disconnect;stopControl=stop;
+        var connectCard=new StackPanel();Add(connectCard,Text("1. アカウント認証",16,true),configStatus,login,details);
+        var selectCard=new StackPanel();Add(selectCard,Text("2. 表示するカレンダー",16,true),reload,choices,Text($"同期対象期間：{data.YearFrom} ～ {data.YearTo}",12,false,Muted),sync);
+        var statusCard=new StackPanel();Add(statusCard,Text("3. 同期状態",16,true),status,stop);
+        var maintenance=new Expander{Header="連携の解除",Content=disconnect,Margin=new Thickness(5)};
+        Add(p,Text("Google Calendar",22,true),Text("読み取り専用 · 操作したときのみ外部通信します。",12,false,Muted),CardBox(connectCard),CardBox(selectCard),CardBox(statusCard),maintenance,Tool("close","閉じる",w.Close));
         w.Closing+=(_,e)=>{if(operation!=null){operation.Cancel();e.Cancel=true;status.Text="中止処理中…";}};
-        Build();ConfigDisplay();w.Content=new ScrollViewer{Content=p,VerticalScrollBarVisibility=ScrollBarVisibility.Auto};w.ShowDialog();
+        Build();ConfigDisplay();ButtonStates();w.Content=new ScrollViewer{Content=p,VerticalScrollBarVisibility=ScrollBarVisibility.Auto};w.ShowDialog();
     }
 }

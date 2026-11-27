@@ -73,6 +73,16 @@ jobs:
             if (!$p.WaitForExit(30000)) { $p.Kill(); throw "UI3 calendar timed out" }
             if ($p.ExitCode -ne 0 -or !(Test-Path $file)) { throw "UI3 calendar failed" }
           }
+      - name: Verify editor validation and search, render narrow layout and forms
+        shell: pwsh
+        run: |
+          foreach ($case in @(@("form-events","--event-form"),@("form-tasks","--task-form"),@("form-interactions","--form-interaction"),@("narrow-calendar","--page=calendar","--narrow"),@("narrow-reports","--page=reports","--narrow"))) {
+            $file = "ui3-preview/$($case[0]).png"
+            $argsForApp = @("--smoke",$file) + $case[1..($case.Length-1)]
+            $p = Start-Process -FilePath (Resolve-Path publish/KOMU-DESK.exe) -ArgumentList $argsForApp -PassThru
+            if (!$p.WaitForExit(30000)) { $p.Kill(); throw "Form smoke timed out: $file" }
+            if ($p.ExitCode -ne 0 -or !(Test-Path $file)) { throw "Form smoke failed: $file" }
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: komu-desk-ui3-images
