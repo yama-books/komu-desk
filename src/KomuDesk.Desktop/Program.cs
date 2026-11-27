@@ -59,6 +59,7 @@ internal static class Program
             if(smoke&&args.Contains("--menu-preview")){window.Width=600;window.Height=780;window.Content=window.BuildSettingsContent(_=>{},()=>{});}
             if(smoke&&args.Contains("--tray-preview")){window.CheckTrayResources();window.Width=530;window.Height=780;window.Content=window.BuildTraySettings(()=>{});}
             if(smoke&&args.Contains("--retention-test"))CheckRetention();
+            if(smoke&&args.Contains("--roster-test"))window.CheckRosterVault();
             var pageArg=args.FirstOrDefault(a=>a.StartsWith("--page=",StringComparison.Ordinal));
             if(smoke&&pageArg!=null){window.Width=args.Contains("--narrow")?720:1040;window.Height=args.Contains("--narrow")?520:720;window.CheckUiGlyphs();var mode=args.FirstOrDefault(a=>a.StartsWith("--mode=",StringComparison.Ordinal));if(mode!=null)window.SetAgendaModeForSmoke(mode[7..]);window.Content=window.BuildManagementContent(pageArg[7..]);}
             if(smoke&&args.Contains("--event-form")){window.Width=470;window.Height=450;window.Content=window.BuildFormForSmoke(false);}

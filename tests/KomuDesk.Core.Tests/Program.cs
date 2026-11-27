@@ -140,4 +140,22 @@ Equal(LessonEngine.Day(setup,autoDate,autoDate).Lessons.Single(l=>l.Period==1).S
 Equal(SchoolSetup.Suggest(setup,new[]{new ScheduleInput(date.AddDays(-1),"月曜時間割","local")},date).Single().Block!="",true,"past protected");
 var migrationPath=Path.Combine(Path.GetTempPath(),"komu-schema-"+Guid.NewGuid().ToString("N")+".json");
 try{var migrationStore=new LocalStore(migrationPath);migrationStore.Save(setup);Equal(migrationStore.Load(date).Schema,2,"special schedule schema rollback guard");Equal(migrationStore.Load(date).BellProfiles.Count,1,"profile round trip");}finally{File.Delete(migrationPath);}
+var rosterSchool=SchoolData.Empty(new DateTime(2026,4,1));
+SchoolSetup.Register(rosterSchool,"架空学年","架空科目",new[]{"A","B"});
+var rosterGrade=rosterSchool.Grades[0].Id;
+var rosterMap=new Dictionary<string,string>{{"1",rosterSchool.Classes[0].Id},{"2",rosterSchool.Classes[1].Id}};
+var rosterText="\t組クミ\t番バン\t3氏名シメイ\t姓(カナ)\t名(カナ)\n101\t１\t１\t架空生徒甲\tカクウ\tコウ\n102\t1\t2\t\t\t\n201\t2\t1\t架空生徒乙\tカクウ\tオツ";
+var rosterParsed=RosterImport.Parse(rosterText);
+Equal(rosterParsed.Rows.Count,2,"roster original six columns");
+Equal(rosterParsed.BlankRows,1,"roster empty name excluded");
+Equal(rosterParsed.InvalidRows.Count,0,"roster original headers");
+var rosterPreview=RosterImport.Preview(rosterSchool,rosterGrade,rosterParsed,rosterMap,Array.Empty<RosterStudent>());
+var rosterSaved=RosterImport.Add(rosterSchool.YearFrom,Array.Empty<RosterStudent>(),rosterPreview);
+Equal(rosterSaved.Count,2,"roster separate classes same number");
+Equal(RosterImport.Preview(rosterSchool,rosterGrade,rosterParsed,rosterMap,rosterSaved).Count(r=>r.Status=="既存"),2,"roster reimport no duplicates");
+var changed=RosterImport.Parse("1\t1\t架空別名\t\t");
+Equal(RosterImport.Preview(rosterSchool,rosterGrade,changed,rosterMap,rosterSaved).Single().Status,"差異・要確認","roster no automatic overwrite");
+var duplicated=RosterImport.Parse("1\t1\t架空甲\t\t\n1\t1\t架空乙\t\t");
+Equal(RosterImport.Preview(rosterSchool,rosterGrade,duplicated,rosterMap,Array.Empty<RosterStudent>()).Count(r=>r.Status=="重複・要確認"),2,"roster input conflict");
+try{RosterImport.Preview(rosterSchool,rosterGrade,rosterParsed,new Dictionary<string,string>{{"1",rosterSchool.Classes[0].Id},{"2",rosterSchool.Classes[0].Id}},rosterSaved);throw new Exception("duplicate mapping accepted");}catch(InvalidDataException){Equal(true,true,"roster explicit one-to-one mapping");}
 Console.WriteLine($"TOTAL {passed} PASS");
