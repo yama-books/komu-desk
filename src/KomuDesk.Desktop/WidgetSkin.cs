@@ -165,13 +165,14 @@ internal sealed partial class DeskWindow
         widgetDatePicker=picker;
         picker.SelectedDateChanged+=(_,_)=>{if(picker.SelectedDate.HasValue){day=picker.SelectedDate.Value.Date;Render();}};
         dateRow.Children.Add(picker);body.Children.Add(dateRow);
-        body.Children.Add(Heading("TIME TABLE",WidgetButton(GlyphText("edit","編集",14),"週間時間割を編集",Weekly),WidgetButton(GlyphText("edit","変更",14),"日別変更",DayChanges)));
+        body.Children.Add(Heading("TIME TABLE",WidgetButton(GlyphText("edit","編集",14),"週間時間割を編集",PaintWeekly),WidgetButton(GlyphText("edit","変更",14),"日別変更",()=>EditDay(day))));
         var now=DateTime.Now;var result=LessonEngine.Day(data,day,now);
+        var schedule=DayScheduleLabel(day);if(schedule!="")body.Children.Add(Text(schedule,12,true,Muted));
         if(!result.Configured)body.Children.Add(Small("この日の時間割は未設定です。"));
         var highlight=day.Date==now.Date?result.Lessons.FirstOrDefault(l=>l.State=="remaining"):null;
         foreach(var n in data.Bells.Select(x=>x.Number).Concat(result.Lessons.Select(x=>x.Period)).Distinct().Order())
         {
-            var l=result.Lessons.FirstOrDefault(x=>x.Period==n);var b=data.Bells.Find(x=>x.Number==n);
+            var l=result.Lessons.FirstOrDefault(x=>x.Period==n);var change=data.Days.Find(x=>x.Date==SchoolData.Iso(day));var b=SchoolSetup.BellsFor(data,change).FirstOrDefault(x=>x.Number==n);
             if(l==null&&!data.Display.ShowFree)continue;
             var row=new DockPanel{LastChildFill=true,MinHeight=30};
             var prefix=Small($"{n}限  {l?.Start??b?.Start??""}");prefix.Width=76;DockPanel.SetDock(prefix,Dock.Left);row.Children.Add(prefix);

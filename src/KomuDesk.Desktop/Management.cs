@@ -143,22 +143,25 @@ internal sealed partial class DeskWindow
     private void EditDay(DateTime d)
     {
         var draft=data.Clone();var date=SchoolData.Iso(d);var item=draft.Days.SingleOrDefault(x=>x.Date==date);
-        var w=Dialog("日別変更 · "+DayText(d),460,360);var p=new StackPanel{Margin=new Thickness(16)};
+        var w=Dialog("日別変更 · "+DayText(d),460,520);var p=new StackPanel{Margin=new Thickness(16)};
         var closed=new CheckBox{Content="この日は全休",IsChecked=item?.Closed==true,Margin=new Thickness(0,8,0,8)};
         var choices=new ComboBox{ItemsSource=new[]{"通常曜日","日曜日","月曜日","火曜日","水曜日","木曜日","金曜日","土曜日"},SelectedIndex=item?.Weekday is int n?n+1:0,MinHeight=32};
         var reason=new TextBox{Text=item?.Reason??"",MinHeight=32};
+        var profile=new ComboBox{ItemsSource=new[]{new Choice("","通常時程")}.Concat(data.BellProfiles.Select(p=>new Choice(p.Id,p.Name))).ToArray(),DisplayMemberPath="Label",SelectedValuePath="Id",SelectedValue=item?.ProfileId??""};
+        var limit=new ComboBox{ItemsSource=new[]{"全時限"}.Concat(Enumerable.Range(1,20).Select(n=>n+"限まで")).ToArray(),SelectedIndex=item?.MaxPeriod??0};
         var actions=new WrapPanel();
         Add(actions,Tool("save","保存",()=>{
             draft.Days.RemoveAll(x=>x.Date==date);
-            if(closed.IsChecked==true||choices.SelectedIndex>0||reason.Text.Trim()!="")draft.Days.Add(new DayChange{Date=date,Closed=closed.IsChecked==true,Weekday=choices.SelectedIndex>0?choices.SelectedIndex-1:null,Reason=reason.Text.Trim()});
+            if(closed.IsChecked==true||choices.SelectedIndex>0||reason.Text.Trim()!=""||profile.SelectedIndex>0||limit.SelectedIndex>0)draft.Days.Add(new DayChange{Date=date,Closed=closed.IsChecked==true,Weekday=choices.SelectedIndex>0?choices.SelectedIndex-1:null,ProfileId=(string?)profile.SelectedValue??"",MaxPeriod=limit.SelectedIndex>0?limit.SelectedIndex:null,Reason=reason.Text.Trim()});
             if(Commit(draft))w.Close();
         }),Tool("close","取消",w.Close),Tool("edit","個別時限・一括変更",()=>{w.Close();DayChanges();}));
-        Add(p,Text(DayText(d),18,true),Text("曜日を変更する場合だけ選択してください。既存確定実績は変更しません。",12,false,Muted),closed,Text("適用曜日"),choices,Text("理由"),reason,actions);
+        Add(p,Text(DayText(d),18,true),Text("曜日を変更する場合だけ選択してください。既存確定実績は変更しません。",12,false,Muted),closed,Text("適用曜日"),choices,Text("時程"),profile,Text("上限時限"),limit,Text("理由"),reason,actions);
         w.Content=PageScroll(p);w.ShowDialog();
     }
     private FrameworkElement DayDetail(DateTime d,Action<Action> modal)
     {
         var p=new StackPanel();Add(p,Text(DayText(d),18,true),Text(GoogleSummary(d),11,false,Muted));
+        if(DayScheduleLabel(d)!="")p.Children.Add(Text(DayScheduleLabel(d),13,true));
         if(!LessonEngine.Day(data,d,DateTime.Now).Configured)p.Children.Add(Text("この日の時間割は未設定です。",12,false,Muted));
         var rows=Rows(d);
         if(rows.Count==0)p.Children.Add(Text("表示する予定はありません。",13,false,Muted));
@@ -177,7 +180,7 @@ internal sealed partial class DeskWindow
         pick.SelectedDateChanged+=(_,_)=>{if(pick.SelectedDate is DateTime d){agendaDate=d.Date;if(agendaMode=="一覧"){agendaFrom=d;agendaTo=d.AddDays(30);}refresh();}};toolbar.Children.Add(pick);
         foreach(var pair in new[]{("月","calendar-month"),("週","calendar-week"),("日","calendar-day"),("一覧","calendar-list")})
         {var b=Tool(pair.Item2,pair.Item1,()=>{agendaMode=pair.Item1;refresh();});if(agendaMode==pair.Item1){b.Background=Soft;b.BorderBrush=Ink;}toolbar.Children.Add(b);}
-        Add(toolbar,Tool("sync","同期",()=>modal(GoogleSettings)),Tool("add","予定",()=>modal(()=>EditAgendaEvent(agendaDate))));
+        Add(toolbar,Tool("sync","同期",()=>modal(GoogleSettings)),Tool("spreadsheet","Excel予定",()=>modal(ImportMore)),Tool("calendar","変更候補",()=>modal(ScheduleReview)),Tool("add","予定",()=>modal(()=>EditAgendaEvent(agendaDate))));
         header.Children.Add(toolbar);
         var filters=new WrapPanel{Margin=new Thickness(0,5,0,5)};filters.Children.Add(Glyph("filter",18));
         for(int i=0;i<SourceIds.Length;i++){int n=i;var cb=new CheckBox{Content=SourceNames[i],IsChecked=agendaSources[i],Margin=new Thickness(5),VerticalContentAlignment=VerticalAlignment.Center};cb.Click+=(_,_)=>{agendaSources[n]=cb.IsChecked==true;refresh();};filters.Children.Add(cb);}
@@ -269,7 +272,7 @@ internal sealed partial class DeskWindow
     private FrameworkElement BuildTimetablePage(Action<Action> modal)
     {
         var p=new StackPanel();Add(p,Text("時間割",24,true));
-        var bar=new WrapPanel();Add(bar,Tool("edit","週間時間割を編集",()=>modal(Weekly)),Tool("timetable","時間割の版",()=>modal(Versions)),Tool("bell","時程",()=>modal(Bells)),Tool("edit","日別変更",()=>modal(DayChanges)));p.Children.Add(bar);
+        var bar=new WrapPanel();Add(bar,Tool("edit","かんたん時間割入力",()=>modal(PaintWeekly)),Tool("classes","担当授業登録",()=>modal(RegisterGroups)),Tool("bell","特別時程",()=>modal(SpecialProfiles)),Tool("timetable","時間割の版",()=>modal(Versions)),Tool("bell","時程",()=>modal(Bells)),Tool("edit","日別変更",()=>modal(DayChanges)));p.Children.Add(bar);
         var start=Agenda.WeekStart(agendaDate);var grid=new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(78)});
         for(int i=0;i<7;i++)grid.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(112)});
@@ -283,13 +286,13 @@ internal sealed partial class DeskWindow
         for(int i=0;i<periods.Length;i++)
         {
             int n=periods[i];var bell=data.Bells.Find(b=>b.Number==n);var label=new StackPanel();
-            Add(label,Text(n+"限",14,true),Text(bell==null?"":bell.Start+"–"+bell.End,10,false,Muted));Put(CardBox(label),i+1,0);
+            Add(label,Text(n+"限",14,true),Text("時刻は各日の授業に表示",10,false,Muted));Put(CardBox(label),i+1,0);
             for(int j=0;j<7;j++)
             {
                 var d=dates[j];var l=days[j].Lessons.FirstOrDefault(l=>l.Period==n);
                 if(l==null){var empty=Text(days[j].Configured?"—":"未設定",11,false,Muted);empty.TextAlignment=TextAlignment.Center;Put(new Border{Margin=new Thickness(2),MinHeight=64,Background=White,CornerRadius=new CornerRadius(6),Child=empty},i+1,j+1);continue;}
                 var labels=new WrapPanel();AddGroupLabels(labels,l.GroupId);
-                var cell=new StackPanel();Add(cell,labels,Text(StateText(new AgendaRow(d,"lesson","",data.GroupName(l.GroupId),l.Start,2,l.State,l)),10,false,Muted));
+                var cell=new StackPanel();Add(cell,labels,Text(l.Start+"–"+l.End,10,false,Muted),Text(StateText(new AgendaRow(d,"lesson","",data.GroupName(l.GroupId),l.Start,2,l.State,l)),10,false,Muted));
                 var button=WidgetButton(cell,"授業詳細 "+DayText(d)+" "+n+"限",()=>modal(()=>LessonDetail(l)));button.Margin=new Thickness(2);button.MinHeight=64;button.HorizontalContentAlignment=HorizontalAlignment.Left;Put(button,i+1,j+1);
             }
         }
@@ -356,9 +359,9 @@ internal sealed partial class DeskWindow
     {
         var p=new StackPanel();Add(p,Text("設定",24,true),Text("授業設定・外観・データ管理",12,false,Muted));
         void Group(string name,params (string id,string label,string hint,Action a)[] entries){p.Children.Add(Text(name,14,true));var g=new UniformGrid{Columns=3};foreach(var e in entries)g.Children.Add(Tile(e.id,e.label,e.hint,()=>modal(e.a)));p.Children.Add(g);}
-        Group("授業設定",("classes","学年・色","バッジ",Grades),("classes","クラス・色","バッジ",Classes),("notebook","科目","登録",Subjects),("classes","担当授業","組と科目",Groups),("bell","時程","開始・終了",Bells),("timetable","時間割の版","適用期間",Versions));
+        Group("授業設定",("classes","学年・色","バッジ",Grades),("classes","クラス・色","バッジ",Classes),("notebook","科目","登録",Subjects),("classes","担当授業","一括登録",RegisterGroups),("classes","担当授業詳細","個別編集",Groups),("bell","特別時程","短縮・変則",SpecialProfiles),("calendar","予定連動ルール","完全一致・自動設定",RuleSettings),("calendar","変更候補","確認・適用",ScheduleReview),("bell","時程","開始・終了",Bells),("timetable","時間割の版","適用期間",Versions));
         Group("外観・年度",("appearance","年度・表示","考査・空き",Year),("cat","アイコン","10種類",TraySettings));
-        Group("データ管理",("spreadsheet","Excel取込","初期データ",ImportExcel),("backup","バックアップ","ローカル",Backup),("restore","復元","読込",Restore));
+        Group("データ管理",("spreadsheet","Excel初期移行","既定3シート",ImportExcel),("spreadsheet","Excel予定追加","列指定・プレビュー",ImportMore),("backup","バックアップ","ローカル",Backup),("restore","復元","読込",Restore));
         return PageScroll(p);
     }
 }
