@@ -27,14 +27,14 @@ internal static class Program
                 if(extra)File.WriteAllText(Path.Combine(dir,"user-data.txt"),"fictional");
                 return dir;
             }
-            var active=Fixture(Name(9,'a'));var keep=Fixture(Name(8,'b'));
-            var clean=Fixture(Name(7,'c'),true);var legacy=Fixture(Name(7,'d'));
-            var protect=Fixture(Name(7,'e'),true,true);var unknown=Fixture("manual");
-            var newer=Fixture(Name(10,'f'));
+            int current=UpdateInstall.Current.Build;var active=Fixture(Name(current+2,'a'));var keep=Fixture(Name(current+1,'b'));
+            var clean=Fixture(Name(current,'c'),true);var legacy=Fixture(Name(current,'d'));
+            var protect=Fixture(Name(current,'e'),true,true);var unknown=Fixture("manual");
+            var newer=Fixture(Name(current+3,'f'));
             File.WriteAllText(Path.Combine(root,"active.txt"),Path.GetFileName(active));
             var outside=Path.Combine(root,"data.json");File.WriteAllText(outside,"fictional school data");
-            if(UpdateRetention.Clean(root,active,new Version(0,1,9),-1)!=0||!Directory.Exists(clean))throw new Exception("retention OFF");
-            int removed=UpdateRetention.Clean(root,active,new Version(0,1,9),1);
+            if(UpdateRetention.Clean(root,active,new Version(0,1,current+2),-1)!=0||!Directory.Exists(clean))throw new Exception("retention OFF");
+            int removed=UpdateRetention.Clean(root,active,new Version(0,1,current+2),1);
             if(removed!=2||Directory.Exists(clean)||Directory.Exists(legacy)||!Directory.Exists(keep)||!Directory.Exists(protect)||!Directory.Exists(unknown)||!Directory.Exists(newer)||!Directory.Exists(active)||File.ReadAllText(outside)!="fictional school data")throw new Exception("retention fixture");
         }
         finally{Directory.Delete(root,true);}
@@ -58,6 +58,8 @@ internal static class Program
             if(smoke&&args.Contains("--menu-preview")){window.Width=600;window.Height=780;window.Content=window.BuildSettingsContent(_=>{},()=>{});}
             if(smoke&&args.Contains("--tray-preview")){window.CheckTrayResources();window.Width=530;window.Height=780;window.Content=window.BuildTraySettings(()=>{});}
             if(smoke&&args.Contains("--retention-test"))CheckRetention();
+            var pageArg=args.FirstOrDefault(a=>a.StartsWith("--page=",StringComparison.Ordinal));
+            if(smoke&&pageArg!=null){window.Width=1040;window.Height=720;window.Content=window.BuildManagementContent(pageArg[7..]);}
             if(smoke)
             {
                 app.DispatcherUnhandledException+=(_,e)=>{e.Handled=true;app.Shutdown(1);};
