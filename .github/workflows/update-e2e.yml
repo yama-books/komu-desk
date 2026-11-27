@@ -1,7 +1,7 @@
-name: Verify public updater end-to-end
+name: Verify v0.1.2 to v0.1.3 public updater
 on:
   push:
-    branches: ['feature/app034-update-e2e']
+    branches: ['test/app034-update-e2e-v013']
     paths: ['.github/workflows/update-e2e.yml']
 permissions:
   contents: read
