@@ -7,7 +7,7 @@ namespace KomuDesk.Desktop;
 internal sealed partial class DeskWindow
 {
     // The control template owns chrome, so existing dialogs can continue assigning Content.
-    private static void ApplyDeskChrome(Window w,bool maximize=true)
+    private void ApplyDeskChrome(Window w,bool maximize=true)
     {
         w.WindowStyle=WindowStyle.None;
         w.ResizeMode=ResizeMode.CanResize;
@@ -20,7 +20,7 @@ internal sealed partial class DeskWindow
             <DockPanel>
               <DockPanel DockPanel.Dock="Top" Height="38" Background="#FFFFFF" LastChildFill="True">
                 <StackPanel x:Name="captionButtons" DockPanel.Dock="Right" Orientation="Horizontal" Margin="0,2,5,2"/>
-                <Image Source="{TemplateBinding Icon}" DockPanel.Dock="Left" Width="22" Height="22" Margin="10,0,7,0"/>
+                <Image x:Name="brandIcon" DockPanel.Dock="Left" Width="22" Height="22" Margin="10,0,7,0"/>
                 <TextBlock Text="{TemplateBinding Title}" Foreground="#202020" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
               </DockPanel>
               <ContentPresenter ContentSource="Content" Margin="{TemplateBinding Padding}"/>
@@ -32,6 +32,7 @@ internal sealed partial class DeskWindow
         void Wire()
         {
             w.ApplyTemplate();
+            if(template.FindName("brandIcon",w) is Image image)image.Source=TrayPng(data.Display.TrayIcon);
             if(template.FindName("captionButtons",w) is not StackPanel panel||panel.Children.Count>0)return;
             void AddButton(string id,string label,Action action)
             {
@@ -39,7 +40,7 @@ internal sealed partial class DeskWindow
                 WindowChrome.SetIsHitTestVisibleInChrome(b,true);panel.Children.Add(b);
             }
             AddButton("minimize","最小化",()=>SystemCommands.MinimizeWindow(w));
-            if(maximize)AddButton("maximize","最大化・元に戻す",()=>{if(w.WindowState==WindowState.Maximized)SystemCommands.RestoreWindow(w);else SystemCommands.MaximizeWindow(w);});
+            if(maximize){AddButton("maximize","最大化・元に戻す",()=>{if(w.WindowState==WindowState.Maximized)SystemCommands.RestoreWindow(w);else SystemCommands.MaximizeWindow(w);});var b=(Button)panel.Children[panel.Children.Count-1];w.StateChanged+=(_,_)=>b.Content=Glyph(w.WindowState==WindowState.Maximized?"window-restore":"maximize");}
             AddButton("close","閉じる",()=>SystemCommands.CloseWindow(w));
         }
         Wire();w.Loaded+=(_,_)=>Wire();
