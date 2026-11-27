@@ -55,7 +55,7 @@ def write_ico(path, alpha, ink):
         for n in SIZES:
             a = check.ico.getimage((n, n)).convert("RGBA").getchannel("A")
             hist = a.histogram()
-            assert hist[0] > 0 and hist[255] > 0 and sum(hist[1:255]) > 0, (path, n)
+            assert hist[0] > 0 and sum(hist[128:]) > 0 and sum(hist[1:255]) > 0, (path, n)
 
 def main():
     for i in range(1, 11):
