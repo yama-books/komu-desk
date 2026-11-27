@@ -60,7 +60,7 @@ internal sealed partial class DeskWindow : Window
         BuildWidget();
         if(data.Display.Mini)Height=260;
         timer.Tick+=(_,_)=>Tick(); timer.Start();
-        Closing+=OnClosing; InitGoogle(); InitUpdates(); Render(); Tick();
+        Closing+=OnClosing; Closed+=(_,_)=>DisposeTray(); InitGoogle(); InitUpdates(); Render(); Tick(); InitTray();
     }
     private void Error(Exception e) => MessageBox.Show(this, e is InvalidDataException or ArgumentException or InvalidOperationException or FormatException ? e.Message : "処理に失敗しました。元データは維持されています。 ("+e.GetType().Name+")", "KOMU DESK");
     private bool Commit(SchoolData candidate)
