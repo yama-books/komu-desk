@@ -1,0 +1,17 @@
+name: Verify public updater end-to-end
+on:
+  push:
+    branches: ['feature/app034-update-e2e']
+    paths: ['.github/workflows/update-e2e.yml']
+permissions:
+  contents: read
+jobs:
+  public-update:
+    runs-on: windows-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet run --project tests/KomuDesk.Update.Integration/KomuDesk.Update.Integration.csproj -c Release -- --isolated-ci
