@@ -23,6 +23,16 @@ internal static class UpdateCases
         Check(!state.IsDue(now.AddHours(12.5))&&state.IsDue(now.AddHours(13)),"failed check backoff 1h");
         Check(state.Success==now&&state.HasNewer(new Version(0,1,2)),"failed check preserves last successful metadata");
         Check(UpdateCheckState.Read("corrupt")==UpdateCheckState.Empty&&state.IsDue(now.AddDays(-1)),"invalid history and clock rollback recover");
+        string Dir(int patch,char suffix)=>"v0.1."+patch+"-preview-"+new string(suffix,32);
+        var active=Dir(7,'a');var previous=Dir(6,'b');var older=Dir(5,'c');var oldest=Dir(3,'d');var future=Dir(8,'e');
+        var names=new[]{active,previous,older,oldest,future,"manual","download-123","../outside"};
+        Check(UpdateRetention.Plan(names,active,new Version(0,1,7),1).SequenceEqual(new[]{older,oldest}),"retention keeps active and previous only");
+        Check(UpdateRetention.Plan(names,active,new Version(0,1,7),0).SequenceEqual(new[]{previous,older,oldest}),"retention zero previous");
+        Check(UpdateRetention.Plan(names,active,new Version(0,1,7),2).SequenceEqual(new[]{oldest}),"retention two previous");
+        Check(UpdateRetention.Plan(names,active,new Version(0,1,7),-1).Length==0,"retention off");
+        Check(UpdateRetention.Plan(names,"manual",new Version(0,1,7),1).Length==0,"retention refuses unknown active");
+        Check(UpdateRetention.Plan(names.Append(Dir(6,'f')),active,new Version(0,1,7),1).SequenceEqual(new[]{older,oldest}),"retention protects previous version duplicates");
+        Check(System.Text.Json.JsonSerializer.Deserialize<Preferences>("{}")!.UpdateKeepPrevious==1,"retention backward-compatible default");
         var root=Path.Combine(Path.GetTempPath(),"komu-update-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(root);
         try
         {
