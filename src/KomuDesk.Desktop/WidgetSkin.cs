@@ -54,15 +54,7 @@ internal sealed partial class DeskWindow
         var tools=Horizontal();DockPanel.SetDock(tools,Dock.Right);foreach(var b in buttons)tools.Children.Add(b);row.Children.Add(tools);
         var label=Text(title,13,true);row.Children.Add(label);return row;
     }
-    private static FrameworkElement Cat()
-    {
-        var canvas=new Canvas{Width=65,Height=46,IsHitTestVisible=false};
-        var outline=new System.Windows.Shapes.Path{Stroke=Ink,StrokeThickness=1.4,StrokeLineJoin=PenLineJoin.Round,StrokeStartLineCap=PenLineCap.Round,StrokeEndLineCap=PenLineCap.Round,
-            Data=Geometry.Parse("M 12,24 L 12,8 L 23,16 L 37,16 L 48,8 L 48,30 Q 48,39 30,39 Q 12,39 12,30 Z M 24,39 Q 13,44 28,44 L 49,44 Q 62,44 60,33 M 27,29 L 30,31 L 33,29 M 10,26 L 3,24 M 10,30 L 3,31 M 50,26 L 56,24 M 50,30 L 57,31")};
-        canvas.Children.Add(outline);
-        foreach(double x in new[]{22d,36d}){var eye=new Ellipse{Width=2.8,Height=2.8,Fill=Ink};Canvas.SetLeft(eye,x);Canvas.SetTop(eye,23);canvas.Children.Add(eye);}
-        return canvas;
-    }
+    private static FrameworkElement Cat()=>AssetIcon("cat",60);
     private void AddGroupLabels(Panel panel,string groupId)
     {
         var group=data.Groups.Find(x=>x.Id==groupId);
@@ -82,7 +74,7 @@ internal sealed partial class DeskWindow
         var header=new StackPanel();
         var brand=new DockPanel{Margin=new Thickness(0,0,0,12)};
         var buttons=Horizontal();DockPanel.SetDock(buttons,Dock.Right);
-        Add(buttons,WidgetButton("⚙","設定・管理",Menu),WidgetButton("⌖","最前面切替",ToggleTop),WidgetButton("▫","ミニ表示切替",ToggleMini),
+        Add(buttons,WidgetButton(AssetIcon("settings",17),"設定・管理",Menu),WidgetButton("⌖","最前面切替",ToggleTop),WidgetButton("▫","ミニ表示切替",ToggleMini),
             WidgetButton("−","最小化",()=>WindowState=WindowState.Minimized),WidgetButton("×","閉じる",Close));
         brand.Children.Add(buttons);
         var logo=Text("KOMU DESK",12,true);logo.Cursor=System.Windows.Input.Cursors.SizeAll;logo.ToolTip="ドラッグして移動";
@@ -105,8 +97,8 @@ internal sealed partial class DeskWindow
         header.Children.Add(new Border{BorderBrush=Line,BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(8),Background=White,Padding=new Thickness(11,8,11,8),Margin=new Thickness(0,8,0,4),Child=nextStack});
         DockPanel.SetDock(header,Dock.Top);root.Children.Add(header);
         var footer=new DockPanel{Margin=new Thickness(0,8,0,0)};
-        var links=Horizontal();DockPanel.SetDock(links,Dock.Right);Add(links,WidgetButton("集計","授業数集計",Counts),WidgetButton("帳票","授業日一覧・帳票",Reports));footer.Children.Add(links);
-        updateBadge=WidgetButton("更新あり","アプリのアップデート",Updates);updateBadge.Visibility=Visibility.Collapsed;footer.Children.Add(updateBadge);
+        var links=Horizontal();DockPanel.SetDock(links,Dock.Right);Add(links,WidgetButton(IconText("lesson-count","集計",14),"授業数集計",Counts),WidgetButton(IconText("printer","帳票",14),"授業日一覧・帳票",Reports));footer.Children.Add(links);
+        updateBadge=WidgetButton(IconText("update","更新あり",14),"アプリのアップデート",Updates);updateBadge.Visibility=Visibility.Collapsed;footer.Children.Add(updateBadge);
         DockPanel.SetDock(updateBadge,Dock.Left);
         footerStatus.FontSize=10;footerStatus.Foreground=Muted;footerStatus.VerticalAlignment=VerticalAlignment.Center;footerStatus.TextWrapping=TextWrapping.Wrap;footer.Children.Add(footerStatus);
         DockPanel.SetDock(footer,Dock.Bottom);root.Children.Add(footer);
@@ -167,7 +159,7 @@ internal sealed partial class DeskWindow
             body.Children.Add(new Border{Background=ReferenceEquals(l,highlight)&&l!=null?Soft:Brushes.Transparent,CornerRadius=new CornerRadius(5),Padding=new Thickness(5,1,5,1),Child=row});
         }
         body.Children.Add(Hairline());
-        body.Children.Add(Heading("CALENDAR",WidgetButton("＋","ローカル予定を編集",Events),WidgetButton("同期","Googleカレンダー設定",GoogleSettings)));
+        body.Children.Add(Heading("CALENDAR",WidgetButton("＋","ローカル予定を編集",Events),WidgetButton(AssetIcon("update",16),"Googleカレンダー設定",GoogleSettings)));
         var events=data.Events.Where(e=>e.Date==SchoolData.Iso(day)).Select(e=>(Time:e.Time==""?"終日":e.Time,Title:e.Title,Source:"")).ToList();
         var snapshot=googleState?.Snapshot;
         if(snapshot!=null&&string.CompareOrdinal(SchoolData.Iso(day),snapshot.From)>=0&&string.CompareOrdinal(SchoolData.Iso(day),snapshot.To)<=0)
