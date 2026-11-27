@@ -19,7 +19,7 @@ internal static class RosterVault
         RosterImport.Validate(rows);var plain=JsonSerializer.SerializeToUtf8Bytes(rows);
         try
         {
-            var encrypted=ProtectedData.Protect(plain,null,DataProtectionScope.CurrentUser);
+            var encrypted=ProtectedData.Protect(plain,null,DataProtectionScope.CurrentUser);if(encrypted.Length>16_000_000)throw new InvalidDataException("名列ファイルが大きすぎます。");
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);var temp=path+"."+Guid.NewGuid().ToString("N")+".tmp";
             try{File.WriteAllBytes(temp,encrypted);File.Move(temp,path,true);}
             finally{if(File.Exists(temp))File.Delete(temp);}
