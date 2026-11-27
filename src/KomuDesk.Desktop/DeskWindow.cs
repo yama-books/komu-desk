@@ -47,7 +47,7 @@ internal sealed partial class DeskWindow : Window
     public DeskWindow(LocalStore store, SchoolData data, bool demo)
     {
         this.store=store; this.data=data; this.demo=demo;
-        Title="KOMU DESK · 校務デスク  v0.1.2-preview"+(demo?" [DEMO]":"");
+        Title="KOMU DESK · 校務デスク  "+UpdatePackage.Tag(UpdateInstall.Current)+(demo?" [DEMO]":"");
         FontFamily=new FontFamily("Yu Gothic UI, Meiryo, Segoe UI");
         Background=Paper; Foreground=Ink; MinWidth=280; MinHeight=260;
         Width=Math.Clamp(data.Display.Width,280,800); Height=Math.Clamp(data.Display.Height,260,1000);
@@ -92,7 +92,7 @@ internal sealed partial class DeskWindow : Window
         Item("1  学年・色",Grades); Item("2  クラス・色",Classes); Item("3  科目",Subjects); Item("4  担当授業",Groups);
         Item("5  時程",Bells); Item("6  時間割の版・有効期間",Versions); Item("7  週間時間割",Weekly);
         Item("年度・考査計上・表示",Year); Item("日別変更・個別変更",DayChanges);
-        Item("アプリのアップデート",Updates); Item("Googleカレンダー（任意）",GoogleSettings); Item("既存Excelから初期取り込み",ImportExcel); Item("予定",Events); Item("タスク",Tasks); Item("授業数集計",Counts); Item("授業日一覧・帳票",Reports); Item("バックアップ（別ファイル）",Backup); Item("バックアップから復元",Restore);
+        Item(HasUpdateNotice?"アプリのアップデート（新版あり）":"アプリのアップデート",Updates); Item("Googleカレンダー（任意）",GoogleSettings); Item("既存Excelから初期取り込み",ImportExcel); Item("予定",Events); Item("タスク",Tasks); Item("授業数集計",Counts); Item("授業日一覧・帳票",Reports); Item("バックアップ（別ファイル）",Backup); Item("バックアップから復元",Restore);
         w.Content=new ScrollViewer { Content=p, VerticalScrollBarVisibility=ScrollBarVisibility.Auto }; w.ShowDialog();
     }
     private Window Dialog(string title,double width=760,double height=500)=>new()

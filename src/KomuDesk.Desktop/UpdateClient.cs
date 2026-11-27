@@ -2,6 +2,7 @@ using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using KomuDesk.Core;
 
 namespace KomuDesk.Desktop;
@@ -9,28 +10,34 @@ internal sealed record UpdateOffer(string Tag,Version Version,long Size,string D
 internal sealed class UpdateClient : IDisposable
 {
     private const string Base="https://github.com/yama-books/komu-desk/releases/download/";
-    private readonly HttpClient http=new(new HttpClientHandler{AllowAutoRedirect=false,UseCookies=false}){Timeout=TimeSpan.FromMinutes(3)};
+    private readonly HttpClient http=new(new HttpClientHandler{AllowAutoRedirect=false,UseCookies=false}){Timeout=TimeSpan.FromMinutes(3),MaxResponseContentBufferSize=4_000_000};
     public UpdateClient(){http.DefaultRequestHeaders.UserAgent.ParseAdd("KOMU-DESK-Update/1.0");}
     public async Task<UpdateOffer?> Check(Version current,CancellationToken ct)
     {
         using var response=await http.GetAsync("https://api.github.com/repos/yama-books/komu-desk/releases?per_page=30",ct);
         response.EnsureSuccessStatusCode();
         using var doc=JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
-        var offers=new List<UpdateOffer>();
+        var candidates=new List<(Version Version,string Tag,JsonElement Release)>();
         foreach(var release in doc.RootElement.EnumerateArray())
         {
             if(release.GetProperty("draft").GetBoolean()||!release.GetProperty("prerelease").GetBoolean())continue;
             string tag=release.GetProperty("tag_name").GetString()??"";
             var version=UpdatePackage.ParseTag(tag);if(version==null||version<=current)continue;
-            var assets=release.GetProperty("assets").EnumerateArray().ToArray();
-            var a=assets.Where(x=>x.GetProperty("name").GetString()==UpdatePackage.AssetName).ToArray();
-            if(a.Length!=1||assets.Count(x=>x.GetProperty("name").GetString()=="SHA256SUMS.txt")!=1)continue;
-            long size=a[0].GetProperty("size").GetInt64();
-            if(size<=0||size>200_000_000)continue;
-            string digest=a[0].TryGetProperty("digest",out var d)&&d.ValueKind==JsonValueKind.String?d.GetString()??"":"";
-            offers.Add(new(tag,version,size,digest));
+            candidates.Add((version,tag,release));
         }
-        return offers.OrderByDescending(x=>x.Version).FirstOrDefault();
+        if(candidates.Count==0)return null;
+        var candidate=candidates.OrderByDescending(x=>x.Version).First();
+        {
+            var version=candidate.Version;var tag=candidate.Tag;
+            var assets=candidate.Release.GetProperty("assets").EnumerateArray().ToArray();
+            var a=assets.Where(x=>x.GetProperty("name").GetString()==UpdatePackage.AssetName).ToArray();
+            if(a.Length!=1||assets.Count(x=>x.GetProperty("name").GetString()=="SHA256SUMS.txt")!=1)throw new InvalidDataException("新版の配布ファイルが揃っていません。");
+            long size=a[0].GetProperty("size").GetInt64();
+            if(size<=0||size>200_000_000)throw new InvalidDataException("新版の配布サイズが不正です。");
+            string digest=a[0].TryGetProperty("digest",out var d)&&d.ValueKind==JsonValueKind.String?d.GetString()??"":"";
+            if(!Regex.IsMatch(digest,@"\Asha256:[0-9a-fA-F]{64}\z"))throw new InvalidDataException("GitHubの配布ハッシュがありません。");
+            return new(tag,version,size,digest);
+        }
     }
     private async Task Download(string tag,string name,string path,long max,CancellationToken ct,IProgress<long>? progress=null)
     {
@@ -46,9 +53,9 @@ internal sealed class UpdateClient : IDisposable
             if(response.Content.Headers.ContentLength>max)throw new InvalidDataException("更新サイズの上限を超えています。");
             await using var input=await response.Content.ReadAsStreamAsync(ct);
             await using var output=new FileStream(path,FileMode.CreateNew,FileAccess.Write,FileShare.None);
-            byte[] buffer=new byte[65536];long total=0;int n;
+            byte[] buffer=new byte[65536];long total=0,lastReported=0;int n;
             while((n=await input.ReadAsync(buffer,ct))!=0)
-            {total+=n;if(total>max)throw new InvalidDataException("更新サイズの上限を超えています。");await output.WriteAsync(buffer.AsMemory(0,n),ct);progress?.Report(total);}
+            {total+=n;if(total>max)throw new InvalidDataException("更新サイズの上限を超えています。");await output.WriteAsync(buffer.AsMemory(0,n),ct);if(total-lastReported>=Math.Max(65536,max/100)||total==max){progress?.Report(total);lastReported=total;}}
             return;
         }
         throw new InvalidDataException("更新先の転送回数が多すぎます。");
@@ -62,7 +69,7 @@ internal sealed class UpdateClient : IDisposable
             var sha=Path.Combine(work,"SHA256SUMS.txt");var zip=Path.Combine(work,"package.zip");
             await Download(offer.Tag,"SHA256SUMS.txt",sha,4096,ct);
             var expected=UpdatePackage.ParseChecksum(await File.ReadAllTextAsync(sha,ct));
-            if(offer.Digest!=""&&!offer.Digest.Equals("sha256:"+expected,StringComparison.OrdinalIgnoreCase))throw new InvalidDataException("GitHubのハッシュと配布チェックサムが一致しません。");
+            if(!offer.Digest.Equals("sha256:"+expected,StringComparison.OrdinalIgnoreCase))throw new InvalidDataException("GitHubのハッシュと配布チェックサムが一致しません。");
             await Download(offer.Tag,UpdatePackage.AssetName,zip,offer.Size,ct,progress);
             if(new FileInfo(zip).Length!=offer.Size)throw new InvalidDataException("更新ファイルのサイズが一致しません。");
             await Task.Run(()=>{UpdatePackage.Verify(zip,expected);UpdatePackage.Extract(zip,Path.Combine(work,"app"));},ct);
@@ -78,6 +85,7 @@ internal sealed class UpdateClient : IDisposable
                 catch{if(!probe.HasExited)probe.Kill();throw;}
                 if(probe.ExitCode!=0)throw new InvalidDataException("更新版の試験起動に失敗しました。");
             }
+            ct.ThrowIfCancellationRequested();
             string dir=Path.Combine(root,offer.Tag+"-"+Guid.NewGuid().ToString("N"));
             Directory.Move(Path.Combine(work,"app"),dir);
             return dir;
