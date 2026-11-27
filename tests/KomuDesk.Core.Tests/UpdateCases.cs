@@ -26,6 +26,11 @@ internal static class UpdateCases
         var root=Path.Combine(Path.GetTempPath(),"komu-update-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(root);
         try
         {
+            var store=new LocalStore(Path.Combine(root,"tray-preference.json"));
+            var prefs=SchoolData.Empty(DateTime.Today);
+            Check(prefs.Display.TrayIcon==2&&System.Text.Json.JsonSerializer.Deserialize<Preferences>("{}")!.TrayIcon==2,"default tray icon and older settings");
+            prefs.Display.TrayIcon=8;store.Save(prefs);
+            Check(store.Load(DateTime.Today).Display.TrayIcon==8,"tray selection persists");
             var zip=Path.Combine(root,"package.zip");
             void Build(params string[] entries){if(File.Exists(zip))File.Delete(zip);using var z=ZipFile.Open(zip,ZipArchiveMode.Create);foreach(var name in entries){using var s=new StreamWriter(z.CreateEntry(name).Open());s.Write("fictional");}}
             string[] valid={"KOMU-DESK.exe","KOMU-DESK.dll","KOMU-DESK.runtimeconfig.json","ja/KOMU-DESK.resources.dll"};
