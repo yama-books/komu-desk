@@ -93,4 +93,17 @@ Equal(view.Single(r=>r.Lesson?.State=="confirmed").Lesson!.Note,"fictional note"
 Equal(view.Last().Source,"task","agenda due tasks last");
 Equal(Agenda.Local(closed,tue,now).Count(r=>r.State=="cancelled"),2,"agenda closure state");
 Equal(Agenda.Local(replacement,tue,now).Count(r=>r.Lesson?.Kind=="exam"),1,"agenda exam state");
+Equal(Agenda.Minute("09:45"),585,"timeline minute parsing");
+Equal(Agenda.Minute(""),null,"timeline no invented time");
+var t1=new AgendaRow(monday,"lesson","1","a","09:00",2,StartMinute:540,EndMinute:600);
+var t2=new AgendaRow(monday,"google","2","b","09:15",2,StartMinute:555,EndMinute:630);
+var t3=new AgendaRow(monday,"local","3","point","09:30",2,StartMinute:570);
+var t4=new AgendaRow(monday,"local","4","later","12:00",2,StartMinute:720);
+var t5=new AgendaRow(monday,"local","5","all day","終日",0);
+var positions=Agenda.Place(new[]{t1,t2,t3,t4,t5});
+Equal(positions.Count,4,"timeline excludes untimed");
+Equal(positions.Where(p=>p.Start<700).Select(p=>p.Lane).Distinct().Count(),3,"timeline overlap lanes");
+Equal(positions.Single(p=>p.Row.Key=="4").Lanes,1,"timeline separate overlap group");
+Equal(positions.Single(p=>p.Row.Key=="3").Row.EndMinute,null,"timeline point retains unknown duration");
+Equal(Agenda.Place(new[]{t4 with{StartMinute=1439}})[0].End,1440,"timeline midnight clamp");
 Console.WriteLine($"TOTAL {passed} PASS");

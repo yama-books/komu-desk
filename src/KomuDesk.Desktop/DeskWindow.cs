@@ -50,7 +50,7 @@ internal sealed partial class DeskWindow : Window
     public DeskWindow(LocalStore store, SchoolData data, bool demo)
     {
         this.store=store; this.data=data; this.demo=demo;
-        Title="KOMU DESK · 校務デスク  "+UpdatePackage.Tag(UpdateInstall.Current)+(demo?" [DEMO]":"");
+        Title="KOMU DESK "+UpdateInstall.Current.ToString(3)+(demo?" [DEMO]":"");
         FontFamily=new FontFamily("Yu Gothic UI, Meiryo, Segoe UI");
         Background=Paper; Foreground=Ink; MinWidth=280; MinHeight=260;
         Width=Math.Clamp(data.Display.Width,280,800); Height=Math.Clamp(data.Display.Height,260,1000);
@@ -107,7 +107,7 @@ internal sealed partial class DeskWindow : Window
         var d=data.Clone(); var rows=new ObservableCollection<T>(get(d)); var w=Dialog(title);
         var p=new DockPanel { Margin=new Thickness(14) };
         var tip=Text(hint,13,false,Muted); tip.Margin=new Thickness(0,0,0,8); DockPanel.SetDock(tip,Dock.Top); p.Children.Add(tip);
-        var grid=new DataGrid { ItemsSource=rows, AutoGenerateColumns=false, CanUserAddRows=false, CanUserDeleteRows=false, SelectionMode=DataGridSelectionMode.Extended, HeadersVisibility=DataGridHeadersVisibility.Column, RowHeaderWidth=0, Margin=new Thickness(0,0,0,8) };
+        var grid=Table();grid.ItemsSource=rows;grid.CanUserDeleteRows=false;grid.SelectionMode=DataGridSelectionMode.Extended;grid.Margin=new Thickness(0,0,0,8);
         foreach(var c in columns) grid.Columns.Add(c);
         var bar=Horizontal(); DockPanel.SetDock(bar,Dock.Bottom);
         Add(bar,Btn("追加",()=>{rows.Add(new T());grid.ScrollIntoView(rows.Last());}),Btn("削除",()=>{ if(grid.SelectedItems.Count==0||MessageBox.Show(w,"選択行を削除しますか？（保存で確定）","確認",MessageBoxButton.YesNo)!=MessageBoxResult.Yes)return;foreach(var row in grid.SelectedItems.Cast<T>().ToList()) rows.Remove(row); }),
@@ -164,9 +164,20 @@ internal sealed partial class DeskWindow : Window
             }
             panel.Children.Add(grid);
         }
-        select.SelectionChanged+=(_,_)=>Build();select.SelectedValue=data.Timetables.FirstOrDefault(t=>SchoolData.ParseDate(t.From)<=day&&SchoolData.ParseDate(t.To)>=day)?.Id??data.Timetables[0].Id;
+        bool restoring=false;
+        bool Dirty()
+        {
+            if(versionId==null)return false;var original=data.Timetables.Single(t=>t.Id==versionId);
+            return boxes.Any(x=>(x.box.SelectedValue as string??"")!=(original.Slots.FirstOrDefault(s=>s.Day==x.day&&s.Period==x.period)?.GroupId??""));
+        }
+        select.SelectionChanged+=(_,_)=>{
+            if(restoring)return;
+            if(Dirty()&&MessageBox.Show(w,"未保存の時間割変更があります。破棄して版を切り替えますか？","確認",MessageBoxButton.YesNo)!=MessageBoxResult.Yes)
+            {restoring=true;select.SelectedValue=versionId;restoring=false;return;}
+            Build();
+        };select.SelectedValue=data.Timetables.FirstOrDefault(t=>SchoolData.ParseDate(t.From)<=day&&SchoolData.ParseDate(t.To)>=day)?.Id??data.Timetables[0].Id;
         Add(footer,Btn("選択した版を保存",()=>{if(versionId==null)return;var d=data.Clone();d.Timetables.Single(x=>x.Id==versionId).Slots=boxes.Where(x=>(x.box.SelectedValue as string)!="").Select(x=>new Slot{Day=x.day,Period=x.period,GroupId=(string)x.box.SelectedValue}).ToList();if(Commit(d))w.Close();}),Btn("取消",w.Close));
-        panel.Children.Add(Text("版を切り替えると未保存の編集は破棄されます。",12,false,Muted));w.Content=p;w.ShowDialog();
+        panel.Children.Add(Text("版を切り替える際は未保存の変更を確認します。",12,false,Muted));w.Content=p;w.ShowDialog();
     }
     private void Year()
     {
@@ -201,7 +212,7 @@ internal sealed partial class DeskWindow : Window
         var bar=Horizontal();DockPanel.SetDock(bar,Dock.Top);
         var start=new DatePicker{SelectedDate=SchoolData.ParseDate(data.YearFrom)};var end=new DatePicker{SelectedDate=SchoolData.ParseDate(data.YearTo)};
         var summary=Text("",12,false,Muted);DockPanel.SetDock(summary,Dock.Bottom);
-        var grid=new DataGrid{AutoGenerateColumns=false,IsReadOnly=true,CanUserAddRows=false,RowHeaderWidth=0};
+        var grid=Table();grid.IsReadOnly=true;
         foreach(var (label,key) in new[]{("担当授業","Name"),("確定","Confirmed"),("推定","Estimated"),("残予定","Remaining"),("見込み","Forecast"),("休講","Cancelled"),("要確認","Unresolved")})grid.Columns.Add(Col(label,key));
         void Refresh(){try{if(start.SelectedDate==null||end.SelectedDate==null)return;var a=start.SelectedDate.Value;var b=end.SelectedDate.Value;var now=DateTime.Now;var counts=LessonEngine.Count(data,a,b,now);grid.ItemsSource=counts.Select(c=>new{Name=data.GroupName(c.GroupId),c.Confirmed,c.Estimated,c.Remaining,c.Forecast,c.Cancelled,c.Unresolved}).ToList();int missing=0;for(var d=a;d<=b;d=d.AddDays(1))if(!LessonEngine.Day(data,d,now).Configured)missing++;summary.Text=$"考査 {(data.CountExams?"含む":"除く")} / 未設定日 {missing}日 / 推定は未確定";}catch(Exception e){Error(e);}}
         Add(bar,Text("期間 "),start,Text(" ～ "),end,Btn("集計",Refresh));Add(p,bar,summary,grid);w.Content=p;Refresh();w.ShowDialog();
