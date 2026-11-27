@@ -50,6 +50,7 @@ internal sealed partial class DeskWindow
         var status=Text($"現在：{UpdateInstall.Current} preview",14,true);
         var detail=Text("GitHub Releasesの公開評価版を確認します。校務データやGoogle認証情報は送信しません。",13,false,Muted);
         var history=Text(HistoryLabel(),12,false,Muted);
+        var phaseLabel=Text("",12,false,Muted);
         var progress=new ProgressBar{Height=7,Minimum=0,Maximum=100,Visibility=Visibility.Collapsed,Margin=new Thickness(0,6,0,6)};
         var opt=new CheckBox{Content="起動時に新しい版を自動確認する（最大12時間に1回、失敗時は1時間後から）",IsChecked=AutoUpdate,Margin=new Thickness(0,12,0,12)};
         opt.Click+=(_,_)=>{try{if(opt.IsChecked==true){Directory.CreateDirectory(Path.GetDirectoryName(UpdateOptIn)!);File.WriteAllText(UpdateOptIn,"enabled");}else if(File.Exists(UpdateOptIn))File.Delete(UpdateOptIn);}catch{opt.IsChecked=AutoUpdate;status.Text="設定を保存できませんでした。";}};
@@ -65,8 +66,8 @@ internal sealed partial class DeskWindow
             check.IsEnabled=false;apply.IsEnabled=false;cancel.IsEnabled=true;opt.IsEnabled=false;
             try{await task(ct.Token);}
             catch(OperationCanceledException){status.Text="更新を中止しました。旧版は維持されています。";}
-            catch(Exception e){status.Text="更新できませんでした。旧版を維持しています。 ("+e.GetType().Name+")";}
-            finally{operation=null;updateBusy=false;check.IsEnabled=true;apply.IsEnabled=availableUpdate!=null;cancel.IsEnabled=false;opt.IsEnabled=true;progress.Visibility=Visibility.Collapsed;}
+            catch(Exception e){status.Text="更新できませんでした。旧版を維持しています。 ("+e.GetType().Name+")";phaseLabel.Text=e is TimeoutException?"新版の試験起動が時間内に完了しませんでした。": "停止工程："+phaseLabel.Text+"。再試行または手動配布を利用してください。";}
+            finally{operation=null;updateBusy=false;check.IsEnabled=true;apply.IsEnabled=availableUpdate!=null;cancel.IsEnabled=false;opt.IsEnabled=true;progress.IsIndeterminate=false;progress.Visibility=Visibility.Collapsed;}
         }
         check.Click+=async (_,_)=>await Run(async ct=>{
             status.Text="確認中…";availableUpdate=null;var now=DateTimeOffset.UtcNow;
@@ -78,11 +79,11 @@ internal sealed partial class DeskWindow
             var offer=availableUpdate;if(offer==null)return;
             if(MessageBox.Show(w,"GitHubから評価版を取得し、検証後に再起動します。未署名の評価版です。学校の許可がある環境で実行してください。旧版は残ります。","更新の確認",MessageBoxButton.YesNo)!=MessageBoxResult.Yes)return;
             string? staged=null;
-            await Run(async ct=>{progress.Value=0;progress.Visibility=Visibility.Visible;status.Text="取得・検証中…";using var client=new UpdateClient();staged=await client.Stage(offer,ct,new Progress<long>(n=>{progress.Value=Math.Min(100,n*100.0/offer.Size);status.Text=$"取得・検証中… {progress.Value:0}%";}));status.Text="検証完了。再起動します。";});
-            if(staged!=null){PendingUpdate=staged;w.Close();Close();if(!closing)PendingUpdate=null;}
+            await Run(async ct=>{progress.Value=0;progress.Visibility=Visibility.Visible;status.Text="更新処理中";phaseLabel.Text="準備中";progress.IsIndeterminate=true;using var client=new UpdateClient();staged=await client.Stage(offer,ct,new Progress<long>(n=>{progress.IsIndeterminate=false;progress.Value=Math.Min(85,n*85.0/offer.Size);phaseLabel.Text=$"ダウンロード中 {n*100.0/offer.Size:0}%";}),new Progress<string>(p=>{phaseLabel.Text=p;progress.IsIndeterminate=p!="ダウンロード中";}));progress.IsIndeterminate=false;progress.Value=100;phaseLabel.Text="検証完了。再起動します。";});
+            if(staged!=null){PendingUpdate=staged;w.Close();Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle,new Action(()=>{Close();if(!closing){PendingUpdate=null;MessageBox.Show(this,"保存または終了が完了しなかったため、更新を適用しませんでした。");}}));}
         };
         w.Closing+=(_,e)=>{if(operation!=null){operation.Cancel();e.Cancel=true;}};
-        Add(panel,Text("KOMU DESK 更新",20,true),status,detail,history,opt,check,apply,progress,cancel,Text("更新は本人の確認後のみ適用します。自動確認OFFでも手動確認できます。旧版のフォルダは残ります。",12,false,Muted),Btn("閉じる",w.Close));
+        Add(panel,Text("KOMU DESK 更新",20,true),status,detail,history,opt,check,apply,phaseLabel,progress,cancel,Text("更新は本人の確認後のみ適用します。自動確認OFFでも手動確認できます。旧版のフォルダは残ります。",12,false,Muted),Btn("閉じる",w.Close));
         Display();w.Content=new ScrollViewer{Content=panel};w.ShowDialog();
     }
 }
