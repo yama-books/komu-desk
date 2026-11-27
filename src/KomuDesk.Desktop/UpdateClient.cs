@@ -55,7 +55,7 @@ internal sealed class UpdateClient : IDisposable
             await using var output=new FileStream(path,FileMode.CreateNew,FileAccess.Write,FileShare.None);
             byte[] buffer=new byte[65536];long total=0,lastReported=0;int n;
             while((n=await input.ReadAsync(buffer,ct))!=0)
-            {total+=n;if(total>max)throw new InvalidDataException("更新サイズの上限を超えています。");await output.WriteAsync(buffer.AsMemory(0,n),ct);if(total-lastReported>=Math.Max(65536,max/100)||total==max){progress?.Report(total);lastReported=total;}}
+            {total+=n;if(total>max)throw new InvalidDataException("更新サイズの上限を超えています。");await output.WriteAsync(buffer.AsMemory(0,n),ct);if(total-lastReported>=Math.Max(65536,max/100)||total==max){progress?.Report(total);lastReported=total;}if(total==max&&response.Content.Headers.ContentLength==max)break;}
             return;
         }
         throw new InvalidDataException("更新先の転送回数が多すぎます。");
@@ -94,7 +94,7 @@ internal sealed class UpdateClient : IDisposable
             ct.ThrowIfCancellationRequested();
             string dir=Path.Combine(root,offer.Tag+"-"+Guid.NewGuid().ToString("N"));
             phase?.Report("更新ファイルを配置中");
-            Directory.Move(Path.Combine(work,"app"),dir);
+            await Task.Run(()=>Directory.Move(Path.Combine(work,"app"),dir),ct);
             return dir;
         }
         finally{await Task.Run(()=>{try{Directory.Delete(work,true);}catch(IOException){}catch(UnauthorizedAccessException){}}).ConfigureAwait(false);}
