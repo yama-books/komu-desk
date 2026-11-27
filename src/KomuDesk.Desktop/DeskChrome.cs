@@ -29,9 +29,10 @@ internal sealed partial class DeskWindow
         </ControlTemplate>
         """);
         w.Template=template;
-        w.ApplyTemplate();
-        if(template.FindName("captionButtons",w) is StackPanel panel)
+        void Wire()
         {
+            w.ApplyTemplate();
+            if(template.FindName("captionButtons",w) is not StackPanel panel||panel.Children.Count>0)return;
             void AddButton(string id,string label,Action action)
             {
                 var b=Tool(id,label,action,false);b.Margin=new Thickness(1);b.Width=34;b.MinHeight=28;
@@ -41,6 +42,7 @@ internal sealed partial class DeskWindow
             if(maximize)AddButton("maximize","最大化・元に戻す",()=>{if(w.WindowState==WindowState.Maximized)SystemCommands.RestoreWindow(w);else SystemCommands.MaximizeWindow(w);});
             AddButton("close","閉じる",()=>SystemCommands.CloseWindow(w));
         }
+        Wire();w.Loaded+=(_,_)=>Wire();
         w.StateChanged+=(_,_)=>{
             if(template.FindName("frame",w) is Border b)b.Padding=w.WindowState==WindowState.Maximized?SystemParameters.WindowResizeBorderThickness:new Thickness(0);
         };
