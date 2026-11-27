@@ -81,7 +81,7 @@ internal sealed partial class DeskWindow
     private static FrameworkElement SimplePage(string title,string detail,params (string Icon,string Label,Action Action)[] entries)
     {
         var p=new StackPanel();Add(p,Text(title,24,true),Text(detail,13,false,Muted));
-        foreach(var e in entries)p.Children.Add(Tool(e.Icon,e.Label,e.Action));
+        foreach(var e in entries){var b=Tool(e.Icon,e.Label,e.Action);b.HorizontalAlignment=HorizontalAlignment.Left;p.Children.Add(b);}
         return PageScroll(p);
     }
     private string GoogleSummary(DateTime date)
@@ -185,8 +185,12 @@ internal sealed partial class DeskWindow
             grid.MouseDoubleClick+=(_,_)=>{if(grid.SelectedItem is object selected&&selected.GetType().GetProperty("Row")?.GetValue(selected) is AgendaRow r)modal(()=>OpenAgendaRow(r));};
             view.Children.Add(grid);outer.Children.Add(view);return outer;
         }
-        var days=new UniformGrid{Columns=7};var first=agendaMode=="月"?Agenda.WeekStart(Agenda.MonthStart(agendaDate)):Agenda.WeekStart(agendaDate);
-        foreach(string label in new[]{"月","火","水","木","金","土","日"}){var h=Text(label,12,true,Muted);h.TextAlignment=TextAlignment.Center;days.Children.Add(h);}
+        var days=new Grid();for(int i=0;i<7;i++)days.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
+        days.RowDefinitions.Add(new RowDefinition{Height=new GridLength(24)});
+        int gridRows=agendaMode=="月"?6:1;for(int i=0;i<gridRows;i++)days.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
+        void Place(UIElement element,int row,int col){Grid.SetRow(element,row);Grid.SetColumn(element,col);days.Children.Add(element);}
+        var first=agendaMode=="月"?Agenda.WeekStart(Agenda.MonthStart(agendaDate)):Agenda.WeekStart(agendaDate);
+        int headerIndex=0;foreach(string label in new[]{"月","火","水","木","金","土","日"}){var h=Text(label,12,true,Muted);h.TextAlignment=TextAlignment.Center;Place(h,0,headerIndex++);}
         int length=agendaMode=="月"?42:7;
         for(int i=0;i<length;i++)
         {
@@ -195,7 +199,7 @@ internal sealed partial class DeskWindow
             if(rows.Count>0){foreach(var r in rows.Take(agendaMode=="週"?5:2)){var t=Text(r.Time+" "+r.Title,10,false,Muted);t.TextWrapping=TextWrapping.NoWrap;t.TextTrimming=TextTrimming.CharacterEllipsis;content.Children.Add(t);}if(rows.Count>(agendaMode=="週"?5:2))content.Children.Add(Text("ほか "+(rows.Count-(agendaMode=="週"?5:2))+"件",10,false,Muted));}
             var b=WidgetButton(content,DayText(d)+" "+rows.Count+"件",()=>{agendaDate=d;refresh();});b.MinHeight=agendaMode=="週"?115:62;b.Margin=new Thickness(1);b.HorizontalContentAlignment=HorizontalAlignment.Stretch;
             if(d==agendaDate){b.Background=Soft;b.BorderBrush=Ink;b.BorderThickness=new Thickness(2);}else if(d==DateTime.Today)b.BorderBrush=Muted;
-            days.Children.Add(b);
+            Place(b,i/7+1,i%7);
         }
         var split=new Grid();var left=new ColumnDefinition{Width=new GridLength(2,GridUnitType.Star)};var right=new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)};
         split.ColumnDefinitions.Add(left);split.ColumnDefinitions.Add(right);split.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});split.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
@@ -204,13 +208,25 @@ internal sealed partial class DeskWindow
         split.SizeChanged+=(_,_)=>{bool narrow=split.ActualWidth<690;right.Width=narrow?new GridLength(0):new GridLength(1,GridUnitType.Star);Grid.SetColumn(details,narrow?0:1);Grid.SetRow(details,narrow?1:0);};
         outer.Children.Add(PageScroll(split));return outer;
     }
+    internal void SetAgendaModeForSmoke(string mode){agendaMode=mode;}
+    internal void CheckUiGlyphs(){foreach(var id in GlyphPaths.Keys){var g=Glyph(id);g.Measure(new Size(30,30));}}
     private FrameworkElement BuildHome(Action<string> select,Action<Action> modal)
     {
         var p=new StackPanel();Add(p,Text("ホーム",24,true),Text(DayText(DateTime.Today)+"  "+DateTime.Now.ToString("HH:mm"),18));
         var dayRows=LessonEngine.Day(data,DateTime.Today,DateTime.Now).Lessons;
         var nextLesson=dayRows.FirstOrDefault(l=>l.State=="remaining");
         var nextCard=new StackPanel();Add(nextCard,Text("次の授業",12,false,Muted),Text(nextLesson==null?"本日の次の授業はありません":nextLesson.Period+"限  "+data.GroupName(nextLesson.GroupId),20,true));
-        p.Children.Add(CardBox(nextCard));p.Children.Add(DayDetail(DateTime.Today,modal));
+        p.Children.Add(CardBox(nextCard));
+        var daily=new UniformGrid{Columns=2};daily.SizeChanged+=(_,_)=>{int n=daily.ActualWidth<540?1:2;if(daily.Columns!=n)daily.Columns=n;};
+        foreach(var section in new[]{("今日の授業",new[]{"lesson"}),("今日の予定",new[]{"local","google"})})
+        {
+            var card=new StackPanel();Add(card,Text(section.Item1,16,true));
+            var rows=Rows(DateTime.Today).Where(r=>section.Item2.Contains(r.Source)).ToArray();
+            if(rows.Length==0)card.Children.Add(Text("表示する項目はありません。",12,false,Muted));
+            foreach(var r in rows)card.Children.Add(AgendaLine(r,modal));
+            daily.Children.Add(CardBox(card));
+        }
+        p.Children.Add(daily);
         var tasks=new StackPanel();Add(tasks,Text("期限超過・今日のタスク",16,true));
         foreach(var t in data.Tasks.Where(t=>!t.Done&&t.Due!=""&&string.CompareOrdinal(t.Due,SchoolData.Iso(DateTime.Today))<=0).OrderBy(t=>t.Due))tasks.Children.Add(Btn(t.Due+"  "+t.Title,()=>modal(()=>EditAgendaTask(t.Id))));
         tasks.Children.Add(Tool("tasks","タスク一覧",()=>select("tasks")));p.Children.Add(CardBox(tasks));
