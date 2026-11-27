@@ -209,7 +209,7 @@ internal sealed partial class DeskWindow
             var tone=task.Done?QuietTone:task.Due!=""&&string.CompareOrdinal(task.Due,SchoolData.Iso(DateTime.Today))<0?LateTone:TaskTone;
             var text=Text(task.Title,13,false,task.Done?Muted:Ink);
             if(task.Done)text.TextDecorations=TextDecorations.Strikethrough;
-            var cb=new CheckBox{Content=text,IsChecked=task.Done,Margin=new Thickness(5,5,5,5),VerticalContentAlignment=VerticalAlignment.Center};
+            var cb=new CheckBox{IsChecked=task.Done,Margin=new Thickness(4,3,4,3),VerticalContentAlignment=VerticalAlignment.Center,ToolTip="完了を切替"};System.Windows.Automation.AutomationProperties.SetName(cb,task.Title+" 完了切替");
             cb.Click+=(_,_)=>{var d=data.Clone();d.Tasks.Single(x=>x.Id==task.Id).Done=cb.IsChecked==true;if(!Commit(d))cb.IsChecked=task.Done;};
             var row=new DockPanel();DockPanel.SetDock(cb,Dock.Left);row.Children.Add(cb);var details=new StackPanel();Add(details,text,Text(task.Due==""?"期限なし":(tone==LateTone?"期限超過 · ":"期限 · ")+task.Due,10,false,tone.Accent));var edit=WidgetButton(details,task.Title+" 編集",()=>EditAgendaTask(task.Id),false);edit.HorizontalContentAlignment=HorizontalAlignment.Left;row.Children.Add(edit);body.Children.Add(ToneCard(row,tone));
         }
