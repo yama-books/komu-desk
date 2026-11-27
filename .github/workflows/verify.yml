@@ -83,6 +83,12 @@ jobs:
             if (!$p.WaitForExit(30000)) { $p.Kill(); throw "Form smoke timed out: $file" }
             if ($p.ExitCode -ne 0 -or !(Test-Path $file)) { throw "Form smoke failed: $file" }
           }
+      - name: Verify school setup registration, paint and approval
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath (Resolve-Path publish/KOMU-DESK.exe) -ArgumentList @("--smoke","ui3-preview/school-setup.png","--setup-interaction") -PassThru
+          if (!$p.WaitForExit(30000)) { $p.Kill(); throw "School setup smoke timed out" }
+          if ($p.ExitCode -ne 0 -or !(Test-Path "ui3-preview/school-setup.png")) { throw "School setup smoke failed" }
       - uses: actions/upload-artifact@v4
         with:
           name: komu-desk-ui3-images

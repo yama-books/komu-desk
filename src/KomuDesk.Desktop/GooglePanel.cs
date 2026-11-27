@@ -146,6 +146,7 @@ internal sealed partial class DeskWindow
                 using var client=new GoogleCalendarClient();
                 var snapshot=await client.SyncAsync(session,from,to,ct);
                 var nextState=new GoogleState(session,snapshot);googleVault.Save(nextState);googleState=nextState;
+                var draft=data.Clone();int applied=ApplyAutomatic(draft);if(applied>0)Commit(draft);
                 googleStatus="同期成功 · "+snapshot.Events.Count+"件 · 手動同期";
             });
         });

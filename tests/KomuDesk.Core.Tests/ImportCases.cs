@@ -23,6 +23,14 @@ internal static class ImportCases
             Check(LegacyImport.Prepare(path,"架空学年",false).TotalRecalculated==2,"legacy exclude exam");
             Check(File.ReadAllBytes(path).SequenceEqual(original),"source unchanged");
             Check(!LegacyImport.IsEmpty(plan.Data),"repeat initial import blocked");
+            var target=SchoolData.Empty(new DateTime(2026,4,1));
+            var rows=EventImport.Prepare(target,path,LegacyImport.EventsSheet,"B","C","",1);
+            Check(rows.Count(r=>r.Status=="追加")==2,"additive import preserves duplicates");
+            EventImport.Add(target,rows);target.Validate();
+            Check(EventImport.Prepare(target,path,LegacyImport.EventsSheet,"B","C","",1).All(r=>r.Status=="既存"),"additive import idempotent");
+            Check(target.Actuals.Count==0&&target.Timetables[0].Slots.Count==0,"additive import leaves teaching data");
+            var pasted=EventImport.Paste(target,"2026/4/6\t架空行事\n2026/4/6\t架空行事\n2026/4/6\t別予定\t09:00\nnot date\tbad");
+            Check(pasted.Count(r=>r.Status=="追加")==1&&pasted.Count(r=>r.Status=="既存")==2&&pasted.Count(r=>r.Status.StartsWith("要確認"))==1,"paste preview valid duplicate and invalid rows");
             Build(path,true);
             try{LegacyImport.Prepare(path,"架空学年",true);throw new Exception("missing cache accepted");}catch(InvalidDataException){Check(true,"missing cache rejected");}
         }

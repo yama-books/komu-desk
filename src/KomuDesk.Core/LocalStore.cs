@@ -18,6 +18,7 @@ public sealed class LocalStore
     }
     public void Save(SchoolData data)
     {
+        if(data.BellProfiles.Count>0||data.ScheduleRules.Count>0||data.Days.Any(d=>d.MaxPeriod.HasValue||d.ProfileId!=""))data.Schema=2;
         data.Validate();
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         string temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
