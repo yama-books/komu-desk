@@ -20,28 +20,57 @@ internal sealed partial class DeskWindow
     private static readonly Brush Soft = BrushOf("#EFEFEC"), White = BrushOf("#FFFFFF");
     private static ControlTemplate FlatTemplate()
     {
-        var border = new FrameworkElementFactory(typeof(Border), "face");
-        border.SetValue(Border.CornerRadiusProperty,new CornerRadius(5));
-        border.SetBinding(Border.BackgroundProperty,new Binding("Background"){RelativeSource=RelativeSource.TemplatedParent});
-        border.SetBinding(Border.BorderBrushProperty,new Binding("BorderBrush"){RelativeSource=RelativeSource.TemplatedParent});
-        border.SetBinding(Border.BorderThicknessProperty,new Binding("BorderThickness"){RelativeSource=RelativeSource.TemplatedParent});
-        var presenter=new FrameworkElementFactory(typeof(ContentPresenter));
-        presenter.SetBinding(FrameworkElement.MarginProperty,new Binding("Padding"){RelativeSource=RelativeSource.TemplatedParent});
-        presenter.SetBinding(FrameworkElement.HorizontalAlignmentProperty,new Binding("HorizontalContentAlignment"){RelativeSource=RelativeSource.TemplatedParent});
-        presenter.SetValue(FrameworkElement.VerticalAlignmentProperty,VerticalAlignment.Center);
-        border.AppendChild(presenter);
-        var template=new ControlTemplate(typeof(Button)){VisualTree=border};
-        var hover=new Trigger{Property=UIElement.IsMouseOverProperty,Value=true};hover.Setters.Add(new Setter(Border.BackgroundProperty,Soft,"face"));template.Triggers.Add(hover);
-        var pressed=new Trigger{Property=ButtonBase.IsPressedProperty,Value=true};pressed.Setters.Add(new Setter(Border.BackgroundProperty,Line,"face"));template.Triggers.Add(pressed);
-        var focus=new Trigger{Property=UIElement.IsKeyboardFocusedProperty,Value=true};focus.Setters.Add(new Setter(Border.BorderBrushProperty,Muted,"face"));focus.Setters.Add(new Setter(Border.BorderThicknessProperty,new Thickness(1),"face"));template.Triggers.Add(focus);
-        return template;
+        // State-driven, short motion on the painted face, never the hit area.
+        var transition=SystemParameters.ClientAreaAnimation?"0:0:0.12":"0:0:0";
+        var press=SystemParameters.ClientAreaAnimation?"0:0:0.07":"0:0:0";
+        var scale=SystemParameters.ClientAreaAnimation?"0.98":"1";
+        var shift=SystemParameters.ClientAreaAnimation?"1":"0";
+        return (ControlTemplate)System.Windows.Markup.XamlReader.Parse($$"""
+        <ControlTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" TargetType="Button">
+          <Grid Background="Transparent" SnapsToDevicePixels="True">
+            <VisualStateManager.VisualStateGroups>
+              <VisualStateGroup x:Name="CommonStates">
+                <VisualStateGroup.Transitions>
+                  <VisualTransition GeneratedDuration="{{transition}}" />
+                  <VisualTransition To="Pressed" GeneratedDuration="{{press}}" />
+                </VisualStateGroup.Transitions>
+                <VisualState x:Name="Normal"/>
+                <VisualState x:Name="MouseOver">
+                  <Storyboard><DoubleAnimation Storyboard.TargetName="wash" Storyboard.TargetProperty="Opacity" To="0.06" Duration="0"/></Storyboard>
+                </VisualState>
+                <VisualState x:Name="Pressed">
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="wash" Storyboard.TargetProperty="Opacity" To="0.13" Duration="0"/>
+                    <DoubleAnimation Storyboard.TargetName="face" Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleX)" To="{{scale}}" Duration="0"/>
+                    <DoubleAnimation Storyboard.TargetName="face" Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleY)" To="{{scale}}" Duration="0"/>
+                    <DoubleAnimation Storyboard.TargetName="face" Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[1].(TranslateTransform.Y)" To="{{shift}}" Duration="0"/>
+                  </Storyboard>
+                </VisualState>
+                <VisualState x:Name="Disabled">
+                  <Storyboard><DoubleAnimation Storyboard.TargetName="face" Storyboard.TargetProperty="Opacity" To="0.48" Duration="0"/></Storyboard>
+                </VisualState>
+              </VisualStateGroup>
+            </VisualStateManager.VisualStateGroups>
+            <Grid x:Name="face" RenderTransformOrigin="0.5,0.5">
+              <Grid.RenderTransform><TransformGroup><ScaleTransform/><TranslateTransform/></TransformGroup></Grid.RenderTransform>
+              <Border x:Name="outline" CornerRadius="8" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"/>
+              <Border x:Name="wash" Background="#202020" CornerRadius="8" Opacity="0" IsHitTestVisible="False"/>
+              <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center" RecognizesAccessKey="True"/>
+            </Grid>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="outline" Property="BorderBrush" Value="#555555"/><Setter TargetName="outline" Property="BorderThickness" Value="2"/></Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+        """);
     }
     private static readonly ControlTemplate Flat = FlatTemplate();
     private static Button WidgetButton(object label, string tip, Action action, bool compact=true)
     {
-        var b=new Button {Content=label,ToolTip=tip,Template=Flat,Foreground=Muted,Background=Brushes.Transparent,
-            BorderBrush=Brushes.Transparent,BorderThickness=new Thickness(1),Padding=new Thickness(compact?5:8,3,compact?5:8,3),
-            MinHeight=26,Margin=new Thickness(1,0,1,0),FontSize=12,HorizontalContentAlignment=HorizontalAlignment.Center,
+        var b=new Button {Content=label,ToolTip=tip,Template=Flat,Foreground=Ink,Background=compact?White:Brushes.Transparent,
+            BorderBrush=compact?Line:Brushes.Transparent,BorderThickness=new Thickness(1),Padding=new Thickness(compact?5:8,4,compact?5:8,4),
+            MinHeight=28,Margin=new Thickness(1,0,1,0),FontSize=12,HorizontalContentAlignment=HorizontalAlignment.Center,
             Cursor=System.Windows.Input.Cursors.Hand};
         System.Windows.Automation.AutomationProperties.SetName(b,tip);
         b.Click+=(_,_)=>action();return b;
