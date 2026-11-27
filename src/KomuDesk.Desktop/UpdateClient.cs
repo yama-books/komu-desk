@@ -67,8 +67,8 @@ internal sealed class UpdateClient : IDisposable
             if(new FileInfo(zip).Length!=offer.Size)throw new InvalidDataException("更新ファイルのサイズが一致しません。");
             await Task.Run(()=>{UpdatePackage.Verify(zip,expected);UpdatePackage.Extract(zip,Path.Combine(work,"app"));},ct);
             var exe=Path.Combine(work,"app","KOMU-DESK.exe");
-            var info=System.Diagnostics.FileVersionInfo.GetVersionInfo(exe);
-            if(info.FileMajorPart!=offer.Version.Major||info.FileMinorPart!=offer.Version.Minor||info.FileBuildPart!=offer.Version.Build)throw new InvalidDataException("実行ファイルの版が一致しません。");
+            var info=System.Reflection.AssemblyName.GetAssemblyName(Path.Combine(work,"app","KOMU-DESK.dll")).Version;
+            if(info==null||info.Major!=offer.Version.Major||info.Minor!=offer.Version.Minor||info.Build!=offer.Version.Build)throw new InvalidDataException("実行ファイルの版が一致しません。");
             ct.ThrowIfCancellationRequested();
             string dir=Path.Combine(root,offer.Tag+"-"+Guid.NewGuid().ToString("N"));
             Directory.Move(Path.Combine(work,"app"),dir);
