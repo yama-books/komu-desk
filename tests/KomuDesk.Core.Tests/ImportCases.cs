@@ -31,6 +31,12 @@ internal static class ImportCases
             Check(target.Actuals.Count==0&&target.Timetables[0].Slots.Count==0,"additive import leaves teaching data");
             var pasted=EventImport.Paste(target,"2026/4/6\t架空行事\n2026/4/6\t架空行事\n2026/4/6\t別予定\t09:00\nnot date\tbad");
             Check(pasted.Count(r=>r.Status=="追加")==1&&pasted.Count(r=>r.Status=="既存")==2&&pasted.Count(r=>r.Status.StartsWith("要確認"))==1,"paste preview valid duplicate and invalid rows");
+            var weekly=WeeklyImport.Read(path);
+            Check(weekly.Count==2&&weekly[0].Day==1,"weekly file read");
+            var weeklyPlan=WeeklyImport.Prepare(target,target.Timetables[0].Id,"架空学年",weekly);
+            Check(weeklyPlan.AddedGroups==2&&weeklyPlan.Data.Timetables[0].Slots.Count==2&&target.Groups.Count==0,"weekly preview nonmutating");
+            Check(WeeklyImport.Prepare(weeklyPlan.Data,weeklyPlan.Data.Timetables[0].Id,"架空学年",weekly).AddedGroups==0,"weekly group reuse");
+            Check(weeklyPlan.Data.Events.Count==target.Events.Count,"weekly preserves events");
             Build(path,true);
             try{LegacyImport.Prepare(path,"架空学年",true);throw new Exception("missing cache accepted");}catch(InvalidDataException){Check(true,"missing cache rejected");}
         }
