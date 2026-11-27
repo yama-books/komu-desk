@@ -27,6 +27,7 @@ internal static class Program
             var data = demo ? DemoData.Create(DateTime.Today) : store.Load(DateTime.Today);
             var window=new DeskWindow(store,data,demo);
             if(smoke&&args.Contains("--menu-preview")){window.Width=600;window.Height=780;window.Content=window.BuildSettingsContent(_=>{},()=>{});}
+            if(smoke&&args.Contains("--tray-preview")){window.CheckTrayResources();window.Width=530;window.Height=780;window.Content=window.BuildTraySettings(()=>{});}
             if(smoke)
             {
                 app.DispatcherUnhandledException+=(_,e)=>{e.Handled=true;app.Shutdown(1);};
