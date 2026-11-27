@@ -13,8 +13,12 @@ public sealed record DesktopCredential(string ClientId,string ClientSecret)
 {
     public static DesktopCredential Read(string path)
     {
-        var f=new FileInfo(path); if(f.Length>65536)throw new InvalidDataException("OAuth設定ファイルが大きすぎます。");
-        using var doc=JsonDocument.Parse(File.ReadAllText(path));
+        using var stream=File.OpenRead(path);return Read(stream);
+    }
+    public static DesktopCredential Read(Stream stream)
+    {
+        if(!stream.CanSeek||stream.Length>65536)throw new InvalidDataException("OAuth設定ファイルが大きすぎます。");
+        using var doc=JsonDocument.Parse(stream);
         var root=doc.RootElement.GetProperty("installed");
         var id=root.GetProperty("client_id").GetString()??"";
         var secret=root.GetProperty("client_secret").GetString()??"";
