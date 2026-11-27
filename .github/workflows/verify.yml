@@ -58,6 +58,9 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force ui3-preview | Out-Null
+          $p = Start-Process -FilePath (Resolve-Path publish/KOMU-DESK.exe) -ArgumentList @("--smoke","ui3-preview/interactions.png","--page=calendar","--ui3-interaction") -PassThru
+          if (!$p.WaitForExit(30000)) { $p.Kill(); throw "UI3 interaction timed out" }
+          if ($p.ExitCode -ne 0 -or !(Test-Path "ui3-preview/interactions.png")) { throw "UI3 interaction failed" }
           $cases = @('home','calendar','timetable','counts','tasks','reports','google','settings','updates')
           foreach ($page in $cases) {
             $p = Start-Process -FilePath (Resolve-Path publish/KOMU-DESK.exe) -ArgumentList @("--smoke","ui3-preview/$page.png","--page=$page") -PassThru
