@@ -10,6 +10,35 @@ namespace KomuDesk.Desktop;
 
 internal static class Program
 {
+    private static void CheckRetention()
+    {
+        // Only disposable CI fixture directories; no existing user settings or versions.
+        var root=Path.Combine(Path.GetTempPath(),"komu-retention-test-"+Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            string Name(int n,char id)=>$"v0.1.{n}-preview-"+new string(id,32);
+            string Fixture(string name,bool manifest=false,bool extra=false)
+            {
+                var dir=Path.Combine(root,name);Directory.CreateDirectory(dir);
+                foreach(string file in new[]{"KOMU-DESK.exe","KOMU-DESK.dll","KOMU-DESK.runtimeconfig.json"})
+                    File.Copy(Path.Combine(AppContext.BaseDirectory,file),Path.Combine(dir,file));
+                if(manifest)UpdateRetention.RecordPackage(dir);
+                if(extra)File.WriteAllText(Path.Combine(dir,"user-data.txt"),"fictional");
+                return dir;
+            }
+            var active=Fixture(Name(9,'a'));var keep=Fixture(Name(8,'b'));
+            var clean=Fixture(Name(7,'c'),true);var legacy=Fixture(Name(7,'d'));
+            var protect=Fixture(Name(7,'e'),true,true);var unknown=Fixture("manual");
+            var newer=Fixture(Name(10,'f'));
+            File.WriteAllText(Path.Combine(root,"active.txt"),Path.GetFileName(active));
+            var outside=Path.Combine(root,"data.json");File.WriteAllText(outside,"fictional school data");
+            if(UpdateRetention.Clean(root,active,new Version(0,1,9),-1)!=0||!Directory.Exists(clean))throw new Exception("retention OFF");
+            int removed=UpdateRetention.Clean(root,active,new Version(0,1,9),1);
+            if(removed!=2||Directory.Exists(clean)||Directory.Exists(legacy)||!Directory.Exists(keep)||!Directory.Exists(protect)||!Directory.Exists(unknown)||!Directory.Exists(newer)||!Directory.Exists(active)||File.ReadAllText(outside)!="fictional school data")throw new Exception("retention fixture");
+        }
+        finally{Directory.Delete(root,true);}
+    }
     [STAThread]
     public static int Main(string[] args)
     {
@@ -28,6 +57,7 @@ internal static class Program
             var window=new DeskWindow(store,data,demo);
             if(smoke&&args.Contains("--menu-preview")){window.Width=600;window.Height=780;window.Content=window.BuildSettingsContent(_=>{},()=>{});}
             if(smoke&&args.Contains("--tray-preview")){window.CheckTrayResources();window.Width=530;window.Height=780;window.Content=window.BuildTraySettings(()=>{});}
+            if(smoke&&args.Contains("--retention-test"))CheckRetention();
             if(smoke)
             {
                 app.DispatcherUnhandledException+=(_,e)=>{e.Handled=true;app.Shutdown(1);};
@@ -54,6 +84,10 @@ internal static class Program
             }
             if(!demo)window.ContentRendered+=(_,_)=>{try{if(args.Contains("--no-update-redirect"))UpdateInstall.ClearPointer();else UpdateInstall.Activate();}catch{}};
             int result=app.Run(window);
+            if(!demo&&result==0&&window.SavedOnClose&&window.PendingUpdate==null&&!args.Contains("--no-update-redirect"))
+            {
+                try{UpdateRetention.Clean(UpdateInstall.Root,AppContext.BaseDirectory,UpdateInstall.Current,window.KeepPrevious);}catch{}
+            }
             if(window.PendingUpdate!=null)UpdateInstall.Launch(window.PendingUpdate,Environment.ProcessId);
             return result;
         }

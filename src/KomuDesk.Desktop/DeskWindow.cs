@@ -24,6 +24,8 @@ internal sealed partial class DeskWindow : Window
     private readonly TextBlock next = new();
     private readonly DispatcherTimer timer = new() { Interval=TimeSpan.FromSeconds(5) };
     private bool closing;
+    internal bool SavedOnClose=>closing;
+    internal int KeepPrevious=>data.Display.UpdateKeepPrevious;
     private static readonly Brush Paper = BrushOf("#F7F7F5"), Ink = BrushOf("#202020"), Muted = BrushOf("#606060"), Line = BrushOf("#D4D4D4");
     private static Brush BrushOf(string hex) => (Brush)new BrushConverter().ConvertFromString(hex)!;
     private static TextBlock Text(string value, double size=14, bool strong=false, Brush? color=null) => new()

@@ -94,6 +94,7 @@ internal sealed class UpdateClient : IDisposable
             ct.ThrowIfCancellationRequested();
             string dir=Path.Combine(root,offer.Tag+"-"+Guid.NewGuid().ToString("N"));
             phase?.Report("更新ファイルを配置中");
+            await Task.Run(()=>UpdateRetention.RecordPackage(Path.Combine(work,"app")),ct);
             await Task.Run(()=>Directory.Move(Path.Combine(work,"app"),dir),ct);
             return dir;
         }

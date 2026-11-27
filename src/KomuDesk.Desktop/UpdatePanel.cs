@@ -45,7 +45,7 @@ internal sealed partial class DeskWindow
     {
         if(demo){MessageBox.Show(this,"デモでは通信しません。");return;}
         if(updateBusy){MessageBox.Show(this,"更新確認中です。終了後にもう一度開いてください。");return;}
-        var w=Dialog("アプリのアップデート",520,510);
+        var w=Dialog("アプリのアップデート",520,620);
         var panel=new StackPanel{Margin=new Thickness(16)};
         var status=Text($"現在：{UpdateInstall.Current} preview",14,true);
         var detail=Text("GitHub Releasesの公開評価版を確認します。校務データやGoogle認証情報は送信しません。",13,false,Muted);
@@ -54,6 +54,14 @@ internal sealed partial class DeskWindow
         var progress=new ProgressBar{Height=7,Minimum=0,Maximum=100,Visibility=Visibility.Collapsed,Margin=new Thickness(0,6,0,6)};
         var opt=new CheckBox{Content="起動時に新しい版を自動確認する（最大12時間に1回、失敗時は1時間後から）",IsChecked=AutoUpdate,Margin=new Thickness(0,12,0,12)};
         opt.Click+=(_,_)=>{try{if(opt.IsChecked==true){Directory.CreateDirectory(Path.GetDirectoryName(UpdateOptIn)!);File.WriteAllText(UpdateOptIn,"enabled");}else if(File.Exists(UpdateOptIn))File.Delete(UpdateOptIn);}catch{opt.IsChecked=AutoUpdate;status.Text="設定を保存できませんでした。";}};
+        var retention=new ComboBox{Margin=new Thickness(2),MinHeight=32};
+        foreach(var label in new[]{"旧版を残さない","1つ前を保持（推奨）","2つ前まで保持","すべて保持・自動整理OFF"})retention.Items.Add(label);
+        retention.SelectedIndex=data.Display.UpdateKeepPrevious is >=0 and <=2?data.Display.UpdateKeepPrevious:3;
+        retention.SelectionChanged+=(_,_)=>{
+            var d=data.Clone();d.Display.UpdateKeepPrevious=retention.SelectedIndex==3?-1:retention.SelectedIndex;
+            if(!Commit(d))status.Text="保存容量の設定を保存できませんでした。";
+        };
+        var retentionHint=Text("新版の正常終了後、更新管理下の古い版だけを整理します。手動展開版や授業データは対象外です。",12,false,Muted);
         CancellationTokenSource? operation=null;
         var check=new Button{Content="今すぐ確認",Margin=new Thickness(2),Padding=new Thickness(8,6,8,6)};
         var apply=new Button{Content="ダウンロードして更新",Margin=new Thickness(2),Padding=new Thickness(8,6,8,6)};
@@ -77,13 +85,13 @@ internal sealed partial class DeskWindow
         });
         apply.Click+=async (_,_)=>{
             var offer=availableUpdate;if(offer==null)return;
-            if(MessageBox.Show(w,"GitHubから評価版を取得し、検証後に再起動します。未署名の評価版です。学校の許可がある環境で実行してください。旧版は残ります。","更新の確認",MessageBoxButton.YesNo)!=MessageBoxResult.Yes)return;
+            if(MessageBox.Show(w,"GitHubから評価版を取得し、検証後に再起動します。未署名の評価版です。学校の許可がある環境で実行してください。直前版は既定で復旧用に残ります。","更新の確認",MessageBoxButton.YesNo)!=MessageBoxResult.Yes)return;
             string? staged=null;
             await Run(async ct=>{progress.Value=0;progress.Visibility=Visibility.Visible;status.Text="更新処理中";phaseLabel.Text="準備中";progress.IsIndeterminate=true;using var client=new UpdateClient();staged=await client.Stage(offer,ct,new Progress<long>(n=>{progress.IsIndeterminate=false;progress.Value=Math.Min(85,n*85.0/offer.Size);phaseLabel.Text=$"ダウンロード中 {n*100.0/offer.Size:0}%";}),new Progress<string>(p=>{phaseLabel.Text=p;progress.IsIndeterminate=p!="ダウンロード中";}));progress.IsIndeterminate=false;progress.Value=100;phaseLabel.Text="検証完了。再起動します。";});
             if(staged!=null){PendingUpdate=staged;w.Close();Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle,new Action(()=>{Close();if(!closing){PendingUpdate=null;MessageBox.Show(this,"保存または終了が完了しなかったため、更新を適用しませんでした。");}}));}
         };
         w.Closing+=(_,e)=>{if(operation!=null){operation.Cancel();e.Cancel=true;}};
-        Add(panel,Text("KOMU DESK 更新",20,true),status,detail,history,opt,check,apply,phaseLabel,progress,cancel,Text("更新は本人の確認後のみ適用します。自動確認OFFでも手動確認できます。旧版のフォルダは残ります。",12,false,Muted),Btn("閉じる",w.Close));
+        Add(panel,Text("KOMU DESK 更新",20,true),status,detail,history,opt,Text("保存容量の管理",13,true),retention,retentionHint,check,apply,phaseLabel,progress,cancel,Text("更新は本人の確認後のみ適用します。自動確認OFFでも手動確認できます。旧版は保持設定に従い正常終了後に整理します。",12,false,Muted),Btn("閉じる",w.Close));
         Display();w.Content=new ScrollViewer{Content=panel};w.ShowDialog();
     }
 }

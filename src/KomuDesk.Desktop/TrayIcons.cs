@@ -15,28 +15,37 @@ internal sealed partial class DeskWindow
     private Forms.ContextMenuStrip? trayMenu;
     private Drawing.Icon? nativeTrayIcon;
     private static int ValidTray(int id)=>id>=1&&id<=TrayNames.Length?id:2;
-    private static Uri TrayUri(int id,string ext)=>new($"pack://application:,,,/KOMU-DESK;component/Assets/Tray/cat-{ValidTray(id):00}.{ext}");
+    private static readonly int[] IconSizes={16,20,24,32,40,48,64,128,256};
+    private static Uri TrayUri(int id,string ext,bool lightInk=false)=>new($"pack://application:,,,/KOMU-DESK;component/Assets/Tray/cat-{ValidTray(id):00}{(lightInk?"-light":"")}.{ext}");
+    private static bool LightInk()
+    {
+        try{return Microsoft.Win32.Registry.GetValue(@"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize","SystemUsesLightTheme",1) is int value&&value==0;}
+        catch{return false;}
+    }
+    private static int IconSize(int requested)=>IconSizes.OrderBy(n=>Math.Abs(n-requested)).ThenByDescending(n=>n).First();
     private static BitmapSource TrayPng(int id)
     {
         var bitmap=new BitmapImage();bitmap.BeginInit();bitmap.UriSource=TrayUri(id,"png");bitmap.CacheOption=BitmapCacheOption.OnLoad;bitmap.EndInit();bitmap.Freeze();return bitmap;
     }
-    private static Drawing.Icon TrayNative(int id,int size)
+    private static Drawing.Icon TrayNative(int id,int size,bool lightInk=false)
     {
-        using var stream=Application.GetResourceStream(TrayUri(id,"ico"))?.Stream??throw new InvalidDataException("アイコンがありません。");
+        using var stream=Application.GetResourceStream(TrayUri(id,"ico",lightInk))?.Stream??throw new InvalidDataException("アイコンがありません。");
         using var icon=new Drawing.Icon(stream,size,size);
         return (Drawing.Icon)icon.Clone();
     }
-    private static ImageSource TrayWindowImage(int id)
+    private static ImageSource TrayWindowImage(int id,int size,bool lightInk=false)
     {
         using var stream=Application.GetResourceStream(TrayUri(id,"ico"))?.Stream??throw new InvalidDataException("アイコンがありません。");
         var decoder=new IconBitmapDecoder(stream,BitmapCreateOptions.PreservePixelFormat,BitmapCacheOption.OnLoad);
-        var frame=decoder.Frames.OrderByDescending(f=>f.PixelWidth).First();frame.Freeze();return frame;
+        var frame=decoder.Frames.OrderBy(f=>Math.Abs(f.PixelWidth-size)).ThenByDescending(f=>f.PixelWidth).First();frame.Freeze();return frame;
     }
     private void ApplyTrayIcon(int id)
     {
-        Icon=TrayWindowImage(id);
+        bool lightInk=LightInk();
+        var dpi=VisualTreeHelper.GetDpi(this).DpiScaleX;
+        Icon=TrayWindowImage(id,IconSize((int)Math.Round(32*dpi)),lightInk);
         if(tray==null)return;
-        var fresh=TrayNative(id,16);
+        var fresh=TrayNative(id,IconSize((int)Math.Round(16*dpi)),lightInk);
         var old=nativeTrayIcon;
         try{tray.Icon=fresh;nativeTrayIcon=fresh;}
         catch{fresh.Dispose();throw;}
@@ -54,6 +63,8 @@ internal sealed partial class DeskWindow
         try
         {
             ApplyTrayIcon(data.Display.TrayIcon);
+            SourceInitialized+=(_,_)=>{try{ApplyTrayIcon(data.Display.TrayIcon);}catch{}};
+            DpiChanged+=(_,_)=>{try{ApplyTrayIcon(data.Display.TrayIcon);}catch{}};
             if(demo)return;
             trayMenu=new Forms.ContextMenuStrip();
             void Item(string label,Action action)
@@ -109,7 +120,7 @@ internal sealed partial class DeskWindow
             var samples=new StackPanel{Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Center,Margin=new Thickness(0,4,0,2)};
             foreach(var bg in new[]{"#E8E8E8","#242424"})
             {
-                var im=new Image{Source=TrayWindowImage(id),Width=16,Height=16,Stretch=Stretch.Uniform};
+                var im=new Image{Source=TrayWindowImage(id,16,bg=="#242424"),Width=16,Height=16,Stretch=Stretch.Uniform};
                 samples.Children.Add(new Border{Background=BrushOf(bg),CornerRadius=new CornerRadius(3),Padding=new Thickness(4),Margin=new Thickness(2,0,2,0),Child=im});
             }
             var label=Text("",10,true,Muted);label.TextAlignment=TextAlignment.Center;labels.Add(label);
@@ -138,7 +149,14 @@ internal sealed partial class DeskWindow
         for(int i=1;i<=TrayNames.Length;i++)
         {
             var png=TrayPng(i);if(png.PixelWidth!=64||png.PixelHeight!=64)throw new InvalidDataException("PNG size");
-            foreach(int size in new[]{16,32,48}){using var icon=TrayNative(i,size);if(icon.Width!=size||icon.Height!=size)throw new InvalidDataException("ICO size");}
+            foreach(bool light in new[]{false,true})
+            {
+                using var stream=Application.GetResourceStream(TrayUri(i,"ico",light))?.Stream??throw new InvalidDataException("ICO missing");
+                var frames=new IconBitmapDecoder(stream,BitmapCreateOptions.PreservePixelFormat,BitmapCacheOption.OnLoad).Frames;
+                if(!frames.Select(f=>f.PixelWidth).Order().SequenceEqual(IconSizes))throw new InvalidDataException("ICO frames");
+                foreach(int size in IconSizes.Where(n=>n<=64))
+                {using var icon=TrayNative(i,size,light);if(icon.Width!=size||icon.Height!=size)throw new InvalidDataException("ICO size");}
+            }
             ApplyTrayIcon(i);
         }
         ApplyTrayIcon(data.Display.TrayIcon);
