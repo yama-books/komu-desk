@@ -58,10 +58,11 @@ internal sealed partial class DeskWindow
                 nav.Children.Add(b);
             }
         }
-        void Modal(Action action){action();Refresh();}
+        void Modal(Action action){action();if(!closing&&PendingUpdate==null)Refresh();}
         void Refresh()
         {
             Nav();
+            if(management!=null)management.Title="KOMU DESK · "+items.FirstOrDefault(x=>x.Id==managementPage).Label;
             main.Content=managementPage switch{
                 "calendar"=>BuildAgenda(()=>Refresh(),Modal),
                 "timetable"=>BuildTimetablePage(Modal),
@@ -96,7 +97,16 @@ internal sealed partial class DeskWindow
         var rows=Agenda.Local(data,d,DateTime.Now,showCompleted).ToList();
         var s=googleState?.Snapshot;
         if(s!=null&&googleState!=null&&string.CompareOrdinal(SchoolData.Iso(d),s.From)>=0&&string.CompareOrdinal(SchoolData.Iso(d),s.To)<=0)
-            rows.AddRange(s.Events.Where(e=>googleState.Session.SelectedIds.Contains(e.CalendarId)&&e.OnDate(d)).Select(e=>new AgendaRow(d.Date,"google",e.CalendarId+":"+e.Id+":"+e.Start,e.Title,e.DisplayTime(d),e.AllDay?0:e.DisplayTime(d)=="継続"?1:2)));
+            rows.AddRange(s.Events.Where(e=>googleState.Session.SelectedIds.Contains(e.CalendarId)&&e.OnDate(d)).Select(e=>{
+                int? from=null,to=null;
+                if(!e.AllDay)
+                {
+                    var a=DateTimeOffset.Parse(e.Start,System.Globalization.CultureInfo.InvariantCulture).LocalDateTime;
+                    var b=DateTimeOffset.Parse(e.End,System.Globalization.CultureInfo.InvariantCulture).LocalDateTime;
+                    from=(int)Math.Clamp((a-d.Date).TotalMinutes,0,1439);to=(int)Math.Clamp(Math.Ceiling((b-d.Date).TotalMinutes),0,1440);
+                }
+                return new AgendaRow(d.Date,"google",e.CalendarId+":"+e.Id+":"+e.Start,e.Title,e.DisplayTime(d),e.AllDay?0:e.DisplayTime(d)=="継続"?1:2,StartMinute:from,EndMinute:to);
+            }));
         return Agenda.Sort(rows.Where(r=>!filtered||agendaSources[Array.IndexOf(SourceIds,r.Source)]));
     }
     private static string StateText(AgendaRow r)=>r.Source=="lesson"?(r.Lesson?.Kind=="exam"?"考査 · ":"")+(r.State switch{"confirmed"=>"確定","estimated"=>"推定","cancelled"=>"休講","unresolved"=>"要確認",_=>"予定"}):r.Source=="task"?(r.State=="done"?"完了":"未完了"):r.Source=="google"?"Google · 読取専用":"ローカル";
@@ -183,24 +193,15 @@ internal sealed partial class DeskWindow
         if(agendaMode=="一覧")
         {
             var ranges=new WrapPanel();
-            void Range(DateTime a,DateTime b){agendaFrom=a;agendaTo=b;refresh();}
+            void Range(DateTime a,DateTime b){agendaFrom=a;agendaTo=b;agendaDate=a;refresh();}
             Add(ranges,Btn("今日",()=>Range(DateTime.Today,DateTime.Today)),Btn("今週",()=>Range(Agenda.WeekStart(DateTime.Today),Agenda.WeekStart(DateTime.Today).AddDays(6))),Btn("今月",()=>Range(Agenda.MonthStart(DateTime.Today),Agenda.MonthStart(DateTime.Today).AddMonths(1).AddDays(-1))));
             var a=new DatePicker{SelectedDate=agendaFrom,Width=130};var b=new DatePicker{SelectedDate=agendaTo,Width=130};
             Add(ranges,a,Text("～"),b,Btn("表示",()=>{try{if(a.SelectedDate is DateTime x&&b.SelectedDate is DateTime z){Agenda.Range(x,z);Range(x,z);}}catch(Exception ex){Error(ex);}}));header.Children.Add(ranges);
         }
         DockPanel.SetDock(header,Dock.Top);outer.Children.Add(header);
         if(agendaMode=="日"){outer.Children.Add(PageScroll(DayDetail(agendaDate,modal)));return outer;}
-        if(agendaMode=="一覧")
-        {
-            var items=Agenda.Range(agendaFrom,agendaTo).SelectMany(d=>Rows(d)).ToArray();
-            // A virtualized list; each entry carries the date so long ranges do not instantiate every row.
-            // Display date/source/time alongside title using a read-only grid, double click opens detail.
-            var grid=new DataGrid{ItemsSource=items.Select(r=>new{Date=DayText(r.Day),r.Time,Source=SourceNames[Array.IndexOf(SourceIds,r.Source)],r.Title,State=StateText(r),Row=r}).ToArray(),AutoGenerateColumns=false,IsReadOnly=true,CanUserAddRows=false,RowHeaderWidth=0,EnableRowVirtualization=true,EnableColumnVirtualization=true};
-            foreach(var (label,key) in new[]{("日付","Date"),("時刻","Time"),("種類","Source"),("内容","Title"),("状態","State")})grid.Columns.Add(Col(label,key));
-            var view=new DockPanel();var count=Text(items.Length==0?"表示する予定はありません。":$"{items.Length}件 · 行をダブルクリックして詳細",12,false,Muted);DockPanel.SetDock(count,Dock.Top);view.Children.Add(count);
-            grid.MouseDoubleClick+=(_,_)=>{if(grid.SelectedItem is object selected&&selected.GetType().GetProperty("Row")?.GetValue(selected) is AgendaRow r)modal(()=>OpenAgendaRow(r));};
-            view.Children.Add(grid);outer.Children.Add(view);return outer;
-        }
+        if(agendaMode=="一覧"){outer.Children.Add(AgendaList(modal));return outer;}
+        if(agendaMode=="週"){outer.Children.Add(WeekTimeline(refresh,modal));return outer;}
         var days=new Grid();for(int i=0;i<7;i++)days.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
         days.RowDefinitions.Add(new RowDefinition{Height=new GridLength(24)});
         int gridRows=agendaMode=="月"?6:1;for(int i=0;i<gridRows;i++)days.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
@@ -213,7 +214,7 @@ internal sealed partial class DeskWindow
             var d=first.AddDays(i);var rows=Rows(d);var content=new StackPanel();
             Add(content,Text(d.Day.ToString(),14,d==agendaDate,d.Month==agendaDate.Month?Ink:Muted));
             if(rows.Count>0){foreach(var r in rows.Take(agendaMode=="週"?5:2)){var t=Text(r.Time+" "+r.Title,10,false,Muted);t.TextWrapping=TextWrapping.NoWrap;t.TextTrimming=TextTrimming.CharacterEllipsis;content.Children.Add(t);}if(rows.Count>(agendaMode=="週"?5:2))content.Children.Add(Text("ほか "+(rows.Count-(agendaMode=="週"?5:2))+"件",10,false,Muted));}
-            var b=WidgetButton(content,DayText(d)+" "+rows.Count+"件",()=>{agendaDate=d;refresh();});b.MinHeight=agendaMode=="週"?115:62;b.Margin=new Thickness(1);b.HorizontalContentAlignment=HorizontalAlignment.Stretch;
+            var b=WidgetButton(content,DayText(d)+" "+rows.Count+"件",()=>{agendaDate=d;refresh();});b.MinHeight=64;b.Margin=new Thickness(1);b.HorizontalContentAlignment=HorizontalAlignment.Stretch;
             if(d==agendaDate){b.Background=Soft;b.BorderBrush=Ink;b.BorderThickness=new Thickness(2);}else if(d==DateTime.Today)b.BorderBrush=Muted;
             Place(b,i/7+1,i%7);
         }
@@ -277,35 +278,56 @@ internal sealed partial class DeskWindow
     {
         var p=new StackPanel();Add(p,Text("時間割",24,true));
         var bar=new WrapPanel();Add(bar,Tool("edit","週間時間割を編集",()=>modal(Weekly)),Tool("timetable","時間割の版",()=>modal(Versions)),Tool("bell","時程",()=>modal(Bells)),Tool("edit","日別変更",()=>modal(DayChanges)));p.Children.Add(bar);
-        var start=Agenda.WeekStart(agendaDate);var grid=new UniformGrid{Columns=7};
-        for(int i=0;i<7;i++){var d=start.AddDays(i);var column=new StackPanel();Add(column,Text(DayText(d),12,true));foreach(var l in LessonEngine.Day(data,d,DateTime.Now).Lessons){var labels=new WrapPanel();AddGroupLabels(labels,l.GroupId);var s=new StackPanel();Add(s,Text(l.Period+"限 "+l.Start,11,false,Muted),labels,Text(StateText(new AgendaRow(d,"lesson","",data.GroupName(l.GroupId),l.Start,2,l.State,l)),10,false,Muted));column.Children.Add(WidgetButton(s,"授業詳細",()=>modal(()=>LessonDetail(l))));}grid.Children.Add(CardBox(column));}
-        var nav=new WrapPanel();Add(nav,Tool("chevron-left","前週",()=>{agendaDate=agendaDate.AddDays(-7);refreshManagement?.Invoke();}),Text(DayText(start)+" ～ "+DayText(start.AddDays(6))),Tool("chevron-right","翌週",()=>{agendaDate=agendaDate.AddDays(7);refreshManagement?.Invoke();}));Add(p,nav,grid);return PageScroll(p);
+        var start=Agenda.WeekStart(agendaDate);var grid=new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(78)});
+        for(int i=0;i<7;i++)grid.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(112)});
+        var dates=Enumerable.Range(0,7).Select(i=>start.AddDays(i)).ToArray();
+        var days=dates.Select(d=>LessonEngine.Day(data,d,DateTime.Now)).ToArray();
+        var periods=data.Bells.Select(x=>x.Number).Concat(days.SelectMany(d=>d.Lessons.Select(l=>l.Period))).Distinct().Order().ToArray();
+        for(int i=0;i<=periods.Length;i++)grid.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
+        void Put(UIElement element,int r,int c){Grid.SetRow(element,r);Grid.SetColumn(element,c);grid.Children.Add(element);}
+        Put(Text("時限",12,true,Muted),0,0);
+        for(int j=0;j<7;j++)Put(Text(DayText(dates[j])+(days[j].Configured?"":" · 未設定"),11,true),0,j+1);
+        for(int i=0;i<periods.Length;i++)
+        {
+            int n=periods[i];var bell=data.Bells.Find(b=>b.Number==n);var label=new StackPanel();
+            Add(label,Text(n+"限",14,true),Text(bell==null?"":bell.Start+"–"+bell.End,10,false,Muted));Put(CardBox(label),i+1,0);
+            for(int j=0;j<7;j++)
+            {
+                var d=dates[j];var l=days[j].Lessons.FirstOrDefault(l=>l.Period==n);
+                if(l==null){var empty=Text(days[j].Configured?"—":"未設定",11,false,Muted);empty.TextAlignment=TextAlignment.Center;Put(new Border{Margin=new Thickness(2),MinHeight=64,Background=White,CornerRadius=new CornerRadius(6),Child=empty},i+1,j+1);continue;}
+                var labels=new WrapPanel();AddGroupLabels(labels,l.GroupId);
+                var cell=new StackPanel();Add(cell,labels,Text(StateText(new AgendaRow(d,"lesson","",data.GroupName(l.GroupId),l.Start,2,l.State,l)),10,false,Muted));
+                var button=WidgetButton(cell,"授業詳細 "+DayText(d)+" "+n+"限",()=>modal(()=>LessonDetail(l)));button.Margin=new Thickness(2);button.MinHeight=64;button.HorizontalContentAlignment=HorizontalAlignment.Left;Put(button,i+1,j+1);
+            }
+        }
+        var nav=new WrapPanel();Add(nav,Tool("chevron-left","前週",()=>{agendaDate=agendaDate.AddDays(-7);refreshManagement?.Invoke();}),Text(DayText(start)+" ～ "+DayText(start.AddDays(6))),Tool("chevron-right","翌週",()=>{agendaDate=agendaDate.AddDays(7);refreshManagement?.Invoke();}));Add(p,nav,new ScrollViewer{Content=grid,HorizontalScrollBarVisibility=ScrollBarVisibility.Auto,VerticalScrollBarVisibility=ScrollBarVisibility.Disabled});return PageScroll(p);
     }
     private FrameworkElement BuildCountsPage(Action<Action> modal)
     {
         var root=new DockPanel();var top=new StackPanel();Add(top,Text("授業数",24,true),Text("実績・推定・残予定を区別します。",12,false,Muted));
-        var a=new DatePicker{SelectedDate=SchoolData.ParseDate(data.YearFrom)};var b=new DatePicker{SelectedDate=SchoolData.ParseDate(data.YearTo)};
-        var grid=new DataGrid{AutoGenerateColumns=false,IsReadOnly=true,CanUserAddRows=false,RowHeaderWidth=0};
+        var a=new DatePicker{SelectedDate=countFrom??SchoolData.ParseDate(data.YearFrom)};var b=new DatePicker{SelectedDate=countTo??SchoolData.ParseDate(data.YearTo)};
+        var grid=Table();grid.IsReadOnly=true;
         foreach(var (label,key) in new[]{("授業","Name"),("確定","Confirmed"),("推定","Estimated"),("残予定","Remaining"),("見込み","Forecast"),("休講","Cancelled"),("要確認","Unresolved")})grid.Columns.Add(Col(label,key));
-        void Count(){try{if(a.SelectedDate is DateTime from&&b.SelectedDate is DateTime to)grid.ItemsSource=LessonEngine.Count(data,from,to,DateTime.Now).Select(c=>new{Name=data.GroupName(c.GroupId),c.Confirmed,c.Estimated,c.Remaining,c.Forecast,c.Cancelled,c.Unresolved}).ToArray();}catch(Exception ex){Error(ex);}}
+        void Count(){try{if(a.SelectedDate is DateTime from&&b.SelectedDate is DateTime to){grid.ItemsSource=LessonEngine.Count(data,from,to,DateTime.Now).Select(c=>new{Name=data.GroupName(c.GroupId),c.Confirmed,c.Estimated,c.Remaining,c.Forecast,c.Cancelled,c.Unresolved}).ToArray();countFrom=from;countTo=to;}}catch(Exception ex){Error(ex);}}
         var bar=new WrapPanel();Add(bar,a,Text("～"),b,Tool("lesson-count","集計",Count),Tool("printer","帳票",()=>modal(Reports)));top.Children.Add(bar);DockPanel.SetDock(top,Dock.Top);Add(root,top,grid);Count();return root;
     }
     private FrameworkElement BuildTasksPage(Action<Action> modal)
     {
         var p=new StackPanel();Add(p,Text("タスク",24,true),Tool("add","タスク追加",()=>modal(()=>EditAgendaTask(null))),Tool("edit","一括編集",()=>modal(Tasks)));
-        var search=new TextBox{MinHeight=30,Margin=new Thickness(3)};Add(p,Text("検索",12,false,Muted),search);
+        var search=new TextBox{Text=taskSearch,MinHeight=30,Margin=new Thickness(3)};var completed=new CheckBox{Content="完了済みも表示",IsChecked=taskCompleted,Margin=new Thickness(4)};Add(p,Text("検索",12,false,Muted),search,completed);
         var items=new StackPanel();p.Children.Add(items);
-        void Fill(){items.Children.Clear();string now=SchoolData.Iso(DateTime.Today);
+        void Fill(){taskSearch=search.Text;taskCompleted=completed.IsChecked==true;items.Children.Clear();string now=SchoolData.Iso(DateTime.Today);
             string Group(Todo t)=>t.Done?"完了":t.Due==""?"期限なし":string.CompareOrdinal(t.Due,now)<0?"期限超過":t.Due==now?"今日":"近日";
             foreach(string group in new[]{"期限超過","今日","近日","期限なし","完了"})
             {
                 var rows=data.Tasks.Where(t=>Group(t)==group&&t.Title.Contains(search.Text,StringComparison.CurrentCultureIgnoreCase)).OrderBy(t=>t.Due).ToArray();
-                if(rows.Length==0)continue;items.Children.Add(Text(group,14,true));
+                if(rows.Length==0||group=="完了"&&!taskCompleted)continue;items.Children.Add(Text(group+"  "+rows.Length+"件",14,true));
                 foreach(var t in rows){var row=new DockPanel();var cb=new CheckBox{IsChecked=t.Done,Margin=new Thickness(5),VerticalAlignment=VerticalAlignment.Center};cb.Click+=(_,_)=>{var d=data.Clone();d.Tasks.Single(x=>x.Id==t.Id).Done=cb.IsChecked==true;if(Commit(d))Fill();else cb.IsChecked=t.Done;};DockPanel.SetDock(cb,Dock.Left);row.Children.Add(cb);row.Children.Add(WidgetButton(t.Title+"  "+t.Due,"編集",()=>modal(()=>EditAgendaTask(t.Id)),false));items.Children.Add(CardBox(row));}
             }
             if(items.Children.Count==0)items.Children.Add(Text("タスクはありません。",13,false,Muted));
         }
-        search.TextChanged+=(_,_)=>Fill();Fill();return PageScroll(p);
+        search.TextChanged+=(_,_)=>Fill();completed.Click+=(_,_)=>Fill();Fill();return PageScroll(p);
     }
     private FrameworkElement BuildSettingsPage(Action<Action> modal)
     {
