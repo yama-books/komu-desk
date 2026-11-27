@@ -39,7 +39,7 @@ internal sealed partial class DeskWindow
         var navCol=new ColumnDefinition{Width=new GridLength(176)};
         root.ColumnDefinitions.Add(navCol);root.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
         var nav=new StackPanel{Margin=new Thickness(7)};
-        var panel=new Border{Background=Soft,Child=nav};Grid.SetColumn(panel,0);root.Children.Add(panel);
+        var panel=new Border{Background=Soft,Child=PageScroll(nav)};Grid.SetColumn(panel,0);root.Children.Add(panel);
         var main=new ContentControl{Margin=new Thickness(12,8,12,12),HorizontalContentAlignment=HorizontalAlignment.Stretch,VerticalContentAlignment=VerticalAlignment.Stretch};
         Grid.SetColumn(main,1);root.Children.Add(main);
         bool compact=false,manualCompact=false;
@@ -123,7 +123,7 @@ internal sealed partial class DeskWindow
     private void EditAgendaEvent(DateTime d,string? id=null)
     {
         var draft=data.Clone();var item=id==null?new LocalEvent{Date=SchoolData.Iso(d)}:draft.Events.Single(x=>x.Id==id);
-        var w=Dialog(id==null?"予定を追加":"予定を編集",450,330);var p=new StackPanel{Margin=new Thickness(16)};
+        var w=Dialog(id==null?"予定を追加":"予定を編集",450,360);var p=new StackPanel{Margin=new Thickness(16)};
         var title=new TextBox{Text=item.Title,MinHeight=32};var date=new DatePicker{SelectedDate=SchoolData.ParseDate(item.Date)};var time=new TextBox{Text=item.Time,MinHeight=32};
         var bar=new WrapPanel();Add(bar,Tool("save","保存",()=>{if(date.SelectedDate==null)return;item.Title=title.Text.Trim();item.Date=SchoolData.Iso(date.SelectedDate.Value);item.Time=time.Text.Trim();if(id==null&&!draft.Events.Contains(item))draft.Events.Add(item);if(Commit(draft))w.Close();}),Tool("close","取消",w.Close));
         if(id!=null)bar.Children.Add(Tool("trash","削除",()=>{if(MessageBox.Show(w,"このローカル予定を削除しますか？","確認",MessageBoxButton.YesNo)!=MessageBoxResult.Yes)return;draft.Events.Remove(item);if(Commit(draft))w.Close();}));
@@ -178,9 +178,6 @@ internal sealed partial class DeskWindow
         {
             var items=Agenda.Range(agendaFrom,agendaTo).SelectMany(d=>Rows(d)).ToArray();
             // A virtualized list; each entry carries the date so long ranges do not instantiate every row.
-            var list=new ListBox{ItemsSource=items,BorderThickness=new Thickness(0),Background=Paper};
-            VirtualizingStackPanel.SetIsVirtualizing(list,true);VirtualizingStackPanel.SetVirtualizationMode(list,VirtualizationMode.Recycling);
-            var template=new DataTemplate(typeof(AgendaRow));var f=new FrameworkElementFactory(typeof(TextBlock));f.SetBinding(TextBlock.TextProperty,new System.Windows.Data.Binding("Title"));template.VisualTree=f;
             // Display date/source/time alongside title using a read-only grid, double click opens detail.
             var grid=new DataGrid{ItemsSource=items.Select(r=>new{Date=DayText(r.Day),r.Time,Source=SourceNames[Array.IndexOf(SourceIds,r.Source)],r.Title,State=StateText(r),Row=r}).ToArray(),AutoGenerateColumns=false,IsReadOnly=true,CanUserAddRows=false,RowHeaderWidth=0,EnableRowVirtualization=true,EnableColumnVirtualization=true};
             foreach(var (label,key) in new[]{("日付","Date"),("時刻","Time"),("種類","Source"),("内容","Title"),("状態","State")})grid.Columns.Add(Col(label,key));
@@ -230,7 +227,7 @@ internal sealed partial class DeskWindow
     private FrameworkElement BuildCountsPage(Action<Action> modal)
     {
         var root=new DockPanel();var top=new StackPanel();Add(top,Text("授業数",24,true),Text("実績・推定・残予定を区別します。",12,false,Muted));
-        var a=new DatePicker{SelectedDate=SchoolData.ParseDate(data.YearFrom)},b=new DatePicker{SelectedDate=SchoolData.ParseDate(data.YearTo)};
+        var a=new DatePicker{SelectedDate=SchoolData.ParseDate(data.YearFrom)};var b=new DatePicker{SelectedDate=SchoolData.ParseDate(data.YearTo)};
         var grid=new DataGrid{AutoGenerateColumns=false,IsReadOnly=true,CanUserAddRows=false,RowHeaderWidth=0};
         foreach(var (label,key) in new[]{("授業","Name"),("確定","Confirmed"),("推定","Estimated"),("残予定","Remaining"),("見込み","Forecast"),("休講","Cancelled"),("要確認","Unresolved")})grid.Columns.Add(Col(label,key));
         void Count(){try{if(a.SelectedDate is DateTime from&&b.SelectedDate is DateTime to)grid.ItemsSource=LessonEngine.Count(data,from,to,DateTime.Now).Select(c=>new{Name=data.GroupName(c.GroupId),c.Confirmed,c.Estimated,c.Remaining,c.Forecast,c.Cancelled,c.Unresolved}).ToArray();}catch(Exception ex){Error(ex);}}
