@@ -62,8 +62,8 @@ internal static class Program
             if(smoke&&args.Contains("--roster-test"))window.CheckRosterVault();
             var pageArg=args.FirstOrDefault(a=>a.StartsWith("--page=",StringComparison.Ordinal));
             if(smoke&&pageArg!=null){window.Width=args.Contains("--narrow")?720:1040;window.Height=args.Contains("--narrow")?520:720;window.CheckUiGlyphs();var mode=args.FirstOrDefault(a=>a.StartsWith("--mode=",StringComparison.Ordinal));if(mode!=null)window.SetAgendaModeForSmoke(mode[7..]);window.Content=window.BuildManagementContent(pageArg[7..]);}
-            if(smoke&&args.Contains("--event-form")){window.Width=470;window.Height=450;window.Content=window.BuildFormForSmoke(false);}
-            if(smoke&&args.Contains("--task-form")){window.Width=470;window.Height=420;window.Content=window.BuildFormForSmoke(true);}
+            if(smoke&&args.Contains("--event-form")){window.Width=470;window.Height=570;window.Content=window.BuildFormForSmoke(false);}
+            if(smoke&&args.Contains("--task-form")){window.Width=470;window.Height=520;window.Content=window.BuildFormForSmoke(true);}
             if(smoke)
             {
                 app.DispatcherUnhandledException+=(_,e)=>{e.Handled=true;app.Shutdown(1);};
@@ -74,6 +74,7 @@ internal static class Program
                         window.UpdateLayout();
                         if(args.Contains("--ui3-interaction"))window.CheckUi3Interactions();
                         if(args.Contains("--form-interaction"))window.CheckFormInteractions();
+                        if(args.Contains("--picker-interaction"))window.CheckCalendarPicker();
                         if(args.Contains("--setup-interaction"))window.CheckSchoolSetupInteractions();
                         if(!window.IsLoaded||window.ActualWidth<200||window.ActualHeight<150)throw new InvalidOperationException();
                         int i=Array.IndexOf(args,"--smoke");
