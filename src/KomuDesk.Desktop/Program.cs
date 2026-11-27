@@ -54,6 +54,10 @@ internal static class Program
             }
             if(!demo)window.ContentRendered+=(_,_)=>{try{if(args.Contains("--no-update-redirect"))UpdateInstall.ClearPointer();else UpdateInstall.Activate();}catch{}};
             int result=app.Run(window);
+            if(!demo&&result==0&&window.SavedOnClose&&window.PendingUpdate==null&&!args.Contains("--no-update-redirect"))
+            {
+                try{UpdateRetention.Clean(UpdateInstall.Root,AppContext.BaseDirectory,UpdateInstall.Current,window.KeepPrevious);}catch{}
+            }
             if(window.PendingUpdate!=null)UpdateInstall.Launch(window.PendingUpdate,Environment.ProcessId);
             return result;
         }
