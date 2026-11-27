@@ -6,9 +6,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>KOMU-DESK</AssemblyName>
-    <Version>0.1.4-preview</Version>
-    <AssemblyVersion>0.1.4.0</AssemblyVersion>
-    <FileVersion>0.1.4.0</FileVersion>
+    <Version>0.1.5-preview</Version>
+    <AssemblyVersion>0.1.5.0</AssemblyVersion>
+    <FileVersion>0.1.5.0</FileVersion>
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="../KomuDesk.Core/KomuDesk.Core.csproj" /><ProjectReference Include="../KomuDesk.Calendar/KomuDesk.Calendar.csproj" /><PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" /></ItemGroup>
   <ItemGroup><Resource Include="Assets/Icons/*.png" /></ItemGroup>
