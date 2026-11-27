@@ -39,6 +39,13 @@ internal static class UpdateCases
             var target=Path.Combine(root,"new");
             UpdatePackage.Extract(zip,target);
             Check(File.Exists(Path.Combine(target,"KOMU-DESK.exe"))&&File.ReadAllText(data)=="fictional local data","side by side extraction preserves data");
+            using(var cancelled=new CancellationTokenSource())
+            {
+                cancelled.Cancel();
+                var cancelledTarget=Path.Combine(root,"cancelled");
+                try{UpdatePackage.Extract(zip,cancelledTarget,cancelled.Token);throw new Exception("accepted cancelled extraction");}
+                catch(OperationCanceledException){Check(!Directory.Exists(cancelledTarget),"cancelled extraction removed staging");}
+            }
             Build(valid.Append("../escape.dll").ToArray());
             var bad=Path.Combine(root,"bad");
             Reject(()=>UpdatePackage.Extract(zip,bad),"zip traversal rejected");
