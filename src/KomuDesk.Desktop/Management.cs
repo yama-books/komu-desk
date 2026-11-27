@@ -225,6 +225,31 @@ internal sealed partial class DeskWindow
         outer.Children.Add(PageScroll(split));return outer;
     }
     internal void SetAgendaModeForSmoke(string mode){agendaMode=mode;}
+    internal void CheckUi3Interactions()
+    {
+        if(!demo)throw new InvalidOperationException("demo only");
+        agendaMode="月";agendaDate=new DateTime(2026,11,27);
+        Content=BuildManagementContent("calendar");UpdateLayout();
+        IEnumerable<DependencyObject> Walk(DependencyObject node)
+        {
+            yield return node;
+            for(int i=0;i<VisualTreeHelper.GetChildrenCount(node);i++)
+                foreach(var item in Walk(VisualTreeHelper.GetChild(node,i)))yield return item;
+        }
+        Button Find(string label)=>Walk(this).OfType<Button>().First(b=>System.Windows.Automation.AutomationProperties.GetName(b)==label);
+        void Click(string label){Find(label).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));UpdateLayout();}
+        if(Template.FindName("captionButtons",this) is not StackPanel caption||caption.Children.Count<2)throw new InvalidOperationException("chrome buttons");
+        Click("次へ");if(agendaDate.Month!=12)throw new InvalidOperationException("next month");
+        Click("前へ");if(agendaDate!=new DateTime(2026,11,27))throw new InvalidOperationException("previous month");
+        Click(DayText(new DateTime(2026,11,26))+" "+Rows(new DateTime(2026,11,26)).Count+"件");
+        if(agendaDate.Day!=26)throw new InvalidOperationException("date selection");
+        foreach(string mode in new[]{"週","日","一覧","月"}){Click(mode);if(agendaMode!=mode)throw new InvalidOperationException("calendar mode");}
+        var box=Walk(this).OfType<CheckBox>().First(x=>Equals(x.Content,"授業"));box.IsChecked=false;box.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));UpdateLayout();
+        if(agendaSources[2])throw new InvalidOperationException("agenda filter");
+        Click("タスク");if(managementPage!="tasks")throw new InvalidOperationException("navigation");
+        Click("カレンダー");if(managementPage!="calendar"||agendaDate.Day!=26)throw new InvalidOperationException("navigation persistence");
+        agendaSources[2]=true;agendaDate=DateTime.Today;agendaMode="月";Content=BuildManagementContent("calendar");UpdateLayout();
+    }
     internal void CheckUiGlyphs(){foreach(var id in GlyphPaths.Keys){var g=Glyph(id);g.Measure(new Size(30,30));}}
     private FrameworkElement BuildHome(Action<string> select,Action<Action> modal)
     {
