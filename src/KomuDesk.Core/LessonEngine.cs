@@ -26,11 +26,14 @@ public static class LessonEngine
                 continue;
             }
             var group = planned.GetValueOrDefault(n)?.GroupId;
-            var bell = data.Bells.SingleOrDefault(b => b.Number == n);
+            var bell = SchoolSetup.BellsFor(data,change).SingleOrDefault(b => b.Number == n);
+            bool outside=(change?.MaxPeriod is int max&&n>max)||(change?.ProfileId!=""&&change?.ProfileId!=null&&bell==null);
+            var normalBell=data.Bells.SingleOrDefault(b=>b.Number==n);
             var edit = edits.GetValueOrDefault(n);
             var kind = edit?.Action == "replace" ? edit.Kind : "normal";
             if (edit?.Action == "replace") group = edit.GroupId;
             if (group == null) continue;
+            if(outside){result.Add(new Lesson(iso,n,group,normalBell?.Start??"",normalBell?.End??"",kind,edit?.Action=="replace"?"unresolved":"cancelled",edit?.Reason??change?.Reason??"特別時程"));continue;}
             if (bell == null) { result.Add(new Lesson(iso,n,group,"","",kind,"unresolved")); continue; }
             var closed = change?.Closed == true;
             var state = edit?.Action == "replace" && closed ? "unresolved" :

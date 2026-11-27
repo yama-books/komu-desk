@@ -13,7 +13,7 @@ public class Slot { public int Day { get; set; } = 1; public int Period { get; s
 public class Timetable { public string Id { get; set; } = Guid.NewGuid().ToString("N"); public string Name { get; set; } = "通常"; public string From { get; set; } = ""; public string To { get; set; } = ""; public List<Slot> Slots { get; set; } = new(); }
 public class LocalEvent { public string Id { get; set; } = Guid.NewGuid().ToString("N"); public string Date { get; set; } = DateTime.Today.ToString("yyyy-MM-dd"); public string Time { get; set; } = ""; public string Title { get; set; } = ""; }
 public class Todo { public string Id { get; set; } = Guid.NewGuid().ToString("N"); public string Title { get; set; } = ""; public string Due { get; set; } = ""; public bool Done { get; set; } }
-public class DayChange { public string Date { get; set; } = DateTime.Today.ToString("yyyy-MM-dd"); public bool Closed { get; set; } public int? Weekday { get; set; } public string Reason { get; set; } = ""; }
+public class DayChange { public string Date { get; set; } = DateTime.Today.ToString("yyyy-MM-dd"); public bool Closed { get; set; } public string ProfileId { get; set; } = ""; public int? MaxPeriod { get; set; } public int? Weekday { get; set; } public string Reason { get; set; } = ""; }
 public class LessonChange { public string Date { get; set; } = DateTime.Today.ToString("yyyy-MM-dd"); public int Period { get; set; } = 1; public string Action { get; set; } = "cancel"; public string GroupId { get; set; } = ""; public string Kind { get; set; } = "normal"; public string Reason { get; set; } = ""; }
 public class ActualLesson { public string Date { get; set; } = ""; public int Period { get; set; } public string GroupId { get; set; } = ""; public string Kind { get; set; } = "normal"; public string Start { get; set; } = ""; public string End { get; set; } = ""; public bool Held { get; set; } public string Note { get; set; } = ""; }
 public class Preferences { public int UpdateKeepPrevious { get; set; } = 1; public int TrayIcon { get; set; } = 2; public bool Topmost { get; set; } public bool Mini { get; set; } public bool ShowFree { get; set; } = true; public double Left { get; set; } = -1; public double Top { get; set; } = -1; public double Width { get; set; } = 370; public double Height { get; set; } = 740; }
@@ -27,6 +27,8 @@ public class SchoolData
     public List<Subject> Subjects { get; set; } = new();
     public List<TeachingGroup> Groups { get; set; } = new();
     public List<Bell> Bells { get; set; } = new();
+    public List<BellProfile> BellProfiles { get; set; } = new();
+    public List<ScheduleRule> ScheduleRules { get; set; } = new();
     public List<Timetable> Timetables { get; set; } = new();
     public List<LocalEvent> Events { get; set; } = new();
     public List<Todo> Tasks { get; set; } = new();
@@ -81,6 +83,22 @@ public class SchoolData
             Require(b.Number >= 1 && b.Number <= 20 && start >= previous && end > start && end.TotalHours < 24, "時程の順序・時刻を確認してください。");
             previous = end;
         }
+        Unique(BellProfiles.Select(p=>p.Id),"時程ID");Unique(BellProfiles.Select(p=>p.Name),"時程名");
+        foreach(var profile in BellProfiles)
+        {
+            Require(Name(profile.Name)&&profile.Bells.Count>0,"特別時程名・時限を確認してください。");
+            Unique(profile.Bells.Select(b=>b.Number),"特別時程の時限");
+            TimeSpan endBefore=TimeSpan.Zero;
+            foreach(var b in profile.Bells.OrderBy(b=>b.Number))
+            {
+                var a=ParseTime(b.Start);var z=ParseTime(b.End);
+                Require(Bells.Any(x=>x.Number==b.Number)&&a>=endBefore&&z>a&&z.TotalHours<24,"特別時程の時刻・時限が不正です。");endBefore=z;
+            }
+        }
+        Unique(ScheduleRules.Select(r=>r.Id),"連動ルールID");
+        Unique(ScheduleRules.Select(r=>(r.Source,r.Title.Normalize(System.Text.NormalizationForm.FormKC).Trim())),"連動ルール");
+        foreach(var r in ScheduleRules)
+            Require(Name(r.Title)&&r.Source is "local" or "google"&&(r.Weekday==null||r.Weekday is >=0 and <=6)&&(r.MaxPeriod==null||r.MaxPeriod is >=1 and <=20)&&(r.ProfileId==""||BellProfiles.Any(p=>p.Id==r.ProfileId))&&(r.Closed||r.Weekday!=null||r.MaxPeriod!=null||r.ProfileId!="")&&(!r.Closed||r.Weekday==null&&r.MaxPeriod==null&&r.ProfileId==""),"連動ルールを確認してください。");
         DateTime? last = null;
         foreach (var t in Timetables.OrderBy(x => ParseDate(x.From)))
         {
@@ -93,7 +111,7 @@ public class SchoolData
         foreach (var e in Events) { ParseDate(e.Date); if (e.Time != "") ParseTime(e.Time); Require(Name(e.Title), "予定名が必要です。"); }
         foreach (var t in Tasks) { if (t.Due != "") ParseDate(t.Due); Require(Name(t.Title), "タスク名が必要です。"); }
         Unique(Days.Select(x => x.Date), "日別変更");
-        foreach (var x in Days) { var d = ParseDate(x.Date); Require(d >= from && d <= to && (x.Weekday == null || x.Weekday is >= 0 and <= 6), "日別変更の日付・曜日を確認してください。"); }
+        foreach (var x in Days) { var d = ParseDate(x.Date); Require(d >= from && d <= to && (x.Weekday == null || x.Weekday is >= 0 and <= 6) && (x.MaxPeriod==null||x.MaxPeriod is >=1 and <=20) && (x.ProfileId==""||BellProfiles.Any(p=>p.Id==x.ProfileId)), "日別変更の日付・曜日を確認してください。"); }
         Unique(Changes.Select(x => (x.Date, x.Period)), "個別変更");
         foreach (var x in Changes)
         {
