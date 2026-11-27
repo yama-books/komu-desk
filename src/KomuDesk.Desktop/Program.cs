@@ -68,6 +68,7 @@ internal static class Program
                     try
                     {
                         window.UpdateLayout();
+                        if(args.Contains("--ui3-interaction"))window.CheckUi3Interactions();
                         if(!window.IsLoaded||window.ActualWidth<200||window.ActualHeight<150)throw new InvalidOperationException();
                         int i=Array.IndexOf(args,"--smoke");
                         if(i+1<args.Length)
