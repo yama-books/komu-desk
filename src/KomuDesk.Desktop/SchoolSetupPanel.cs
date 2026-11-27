@@ -21,6 +21,25 @@ internal sealed partial class DeskWindow
         var actions=new WrapPanel();Add(actions,Primary("save","一括登録",()=>{try{var draft=data.Clone();int n=SchoolSetup.Register(draft,grade.Text,subject.Text,classes.Text.Split(new[]{'、',',','，','\r','\n','\t'},StringSplitOptions.RemoveEmptyEntries));if(Commit(draft)){preview.Text=n+"授業を追加しました。既存授業は維持しました。";w.Close();}}catch(Exception ex){Error(ex);}}),Tool("close","取消",w.Close));
         w.Content=FormLayout("担当授業を一括登録","同じ学年・クラス・科目は重複登録しません。",p,actions);w.ShowDialog();
     }
+    private void ImportWeeklyFile()
+    {
+        if(demo)return;
+        if(data.Timetables.Count==0){Versions();if(data.Timetables.Count==0)return;}
+        var file=new OpenFileDialog{Filter="Excel (*.xlsx)|*.xlsx",CheckFileExists=true};if(file.ShowDialog(management??this)!=true)return;
+        try
+        {
+            var cells=WeeklyImport.Read(file.FileName);var w=Dialog("元Excelの時間割を取り込む",780,610);var root=new DockPanel{Margin=new Thickness(12)};
+            var top=new StackPanel();var grade=new ComboBox{IsEditable=true,ItemsSource=data.Grades.Select(x=>x.Name).Distinct().ToArray(),Text=data.Grades.Count==1?data.Grades[0].Name:""};
+            var version=new ComboBox{ItemsSource=data.Timetables.Select(t=>new Choice(t.Id,t.Name+" "+t.From+" ～ "+t.To)).ToArray(),DisplayMemberPath="Label",SelectedValuePath="Id",SelectedIndex=0};
+            var status=Text("学年と対象版を指定してください。",12,false,Muted);var grid=Table();grid.IsReadOnly=true;foreach(var (label,key) in new[]{("曜日","Weekday"),("時限","Period"),("元の授業名","Label")})grid.Columns.Add(Col(label,key));
+            grid.ItemsSource=cells.Select(c=>new{Weekday=new[]{"日","月","火","水","木","金","土"}[c.Day],c.Period,c.Label}).ToArray();
+            WeeklyPlan? plan=null;string selectedGrade="",selectedVersion="";Button? apply=null;
+            void Preview(){try{selectedGrade=grade.Text;selectedVersion=(string)version.SelectedValue;plan=WeeklyImport.Prepare(data,selectedVersion,selectedGrade,cells);status.Text=$"{cells.Count}コマ / 新規担当授業 {plan.AddedGroups} / 置換前 {plan.ReplacedSlots}コマ。確定実績は保持します。";apply!.IsEnabled=true;}catch(Exception ex){plan=null;apply!.IsEnabled=false;Error(ex);}}
+            Add(top,Text("元の「時間割（入力）」シート",20,true),Text("指定学年の授業名として取り込みます。別学年を含む表は個別編集で調整してください。",12,false,Muted));Field(top,"学年",grade);Field(top,"置き換える時間割の版",version);Add(top,Tool("spreadsheet","プレビュー",Preview),status);DockPanel.SetDock(top,Dock.Top);root.Children.Add(top);
+            var footer=new WrapPanel();apply=Primary("save","時間割を取り込む",()=>{if(plan==null||selectedGrade!=grade.Text||selectedVersion!=(string)version.SelectedValue){Preview();return;}if(MessageBox.Show(w,"選択中の時間割の週間配置を置き換えます。授業実績は維持します。","確認",MessageBoxButton.YesNo,MessageBoxImage.Question,MessageBoxResult.No)!=MessageBoxResult.Yes)return;if(Commit(plan.Data))w.Close();});apply.IsEnabled=false;Add(footer,apply,Tool("close","取消",w.Close));DockPanel.SetDock(footer,Dock.Bottom);root.Children.Add(footer);root.Children.Add(grid);w.Content=root;w.ShowDialog();
+        }
+        catch(Exception ex){Error(ex);}
+    }
     private void PaintWeekly()
     {
         if(data.Timetables.Count==0){Versions();if(data.Timetables.Count==0)return;}
@@ -155,7 +174,7 @@ internal sealed partial class DeskWindow
             Add(p,Text(DayText(s.Date)+" · "+s.Title,14,true),Text(s.Summary(data),13),Text(s.Block,12,false,Muted),check);list.Children.Add(CardBox(p));choices.Add((s,check));
         }
         if(choices.Count==0)list.Children.Add(Text("変更候補はありません。",13,false,Muted));
-        var footer=new WrapPanel();Add(footer,Primary("check","選択した変更を適用",()=>{var draft=data.Clone();int n=choices.Where(x=>x.Check.IsChecked==true).Count(x=>SchoolSetup.Apply(draft,x.Suggestion,DateTime.Today));if(n==0)return;if(Commit(draft))w.Close();}),Tool("close","閉じる",w.Close));
+        var footer=new WrapPanel();Add(footer,Tool("bell","特別時程を登録",()=>{w.Close();SpecialProfiles();}),Tool("settings","連動ルール",()=>{w.Close();RuleSettings();}),Primary("check","選択した変更を適用",()=>{var draft=data.Clone();int n=choices.Where(x=>x.Check.IsChecked==true).Count(x=>SchoolSetup.Apply(draft,x.Suggestion,DateTime.Today));if(n==0)return;if(Commit(draft))w.Close();}),Tool("close","閉じる",w.Close));
         DockPanel.SetDock(footer,Dock.Bottom);root.Children.Add(footer);root.Children.Add(PageScroll(list));w.Content=root;w.ShowDialog();
     }
     internal void CheckSchoolSetupInteractions()
